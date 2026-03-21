@@ -8,10 +8,8 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
-import numpy as np
-import pandas as pd
-
-from analytics import DATA_DIR, STRAVA_EXTRA_COLS, clear_all_caches
+from analytics import clear_all_caches
+from db import _db
 
 STRAVA_CONFIG_PATH  = Path(__file__).parent.parent / "strava_config.json"
 STRAVA_AUTH_URL     = "https://www.strava.com/oauth/authorize"
@@ -67,133 +65,77 @@ def _ensure_valid_token(cfg: dict) -> dict:
 
 
 def _append_activities(activities: list) -> tuple:
-    """Append new Strava activities to workouts.csv and distance CSVs."""
-    workouts_path = DATA_DIR / "workouts.csv"
-    dwr_path      = DATA_DIR / "by_type" / "DistanceWalkingRunning.csv"
-    cyc_path      = DATA_DIR / "by_type" / "DistanceCycling.csv"
+    """Append new Strava activities into SQLite (workouts + metrics tables)."""
+    conn = _db()
+    _90min_s = 90 * 60  # seconds
 
-    wo_existing  = pd.read_csv(workouts_path)
-    dwr_existing = pd.read_csv(dwr_path)
-    cyc_existing = pd.read_csv(cyc_path)
+    # Load existing workout start_ts for dedup
+    existing_ts = [r[0] for r in conn.execute("SELECT start_ts FROM workouts WHERE source='Strava'").fetchall()]
 
-    wo_existing["_ts"]  = pd.to_datetime(wo_existing["startDate"], errors="coerce").astype("int64")
-    dwr_existing["_ts"] = pd.to_datetime(dwr_existing["startDate"], errors="coerce").astype("int64")
-    cyc_existing["_ts"] = pd.to_datetime(cyc_existing["startDate"], errors="coerce").astype("int64")
-    _90min_ns = 90 * 60 * int(1e9)
+    def _near_existing(ts: float) -> bool:
+        return any(abs(e - ts) < _90min_s for e in existing_ts)
 
-    def _near_existing(ts_ns: int, existing_df: pd.DataFrame, wtype: Optional[str] = None) -> bool:
-        col = existing_df["_ts"].dropna()
-        return bool((abs(col - ts_ns) < _90min_ns).any())
-
-    wo_rows, dwr_rows, cyc_rows = [], [], []
+    wo_rows  = []
+    met_rows = []
     added = skipped = 0
 
     for act in activities:
         local_str = act.get("start_date_local", act["start_date"])
         dt_local  = datetime.fromisoformat(local_str.replace("Z", "+00:00")).replace(tzinfo=None)
-        start_str = dt_local.strftime("%Y-%m-%d %H:%M:%S")
+        start_ts  = dt_local.timestamp()
 
-        elapsed_sec  = act.get("elapsed_time", 0)
-        duration_min = round(elapsed_sec / 60, 4)
-        distance_m   = act.get("distance", 0)
-        distance_km  = round(distance_m / 1000, 4) if distance_m else None
-
-        end_dt  = dt_local + timedelta(seconds=elapsed_sec)
-        end_str = end_dt.strftime("%Y-%m-%d %H:%M:%S")
-
-        sport_type   = act.get("sport_type") or act.get("type", "")
-        workout_type = WORKOUT_TYPE_MAP.get(sport_type, sport_type)
-
-        ts_ns = int(dt_local.timestamp() * 1e9)
-        if _near_existing(ts_ns, wo_existing):
+        if _near_existing(start_ts):
             skipped += 1
             continue
 
-        moving_sec    = act.get("moving_time", elapsed_sec)
-        moving_min    = round(moving_sec / 60, 4)
-        elevation_m   = act.get("total_elevation_gain")
-        avg_hr        = act.get("average_heartrate")
-        max_hr        = act.get("max_heartrate")
-        suffer_score  = act.get("suffer_score")
-        avg_cadence   = act.get("average_cadence")
-        avg_watts     = act.get("average_watts")
-        avg_speed_ms  = act.get("average_speed")
-        avg_speed_kmh = round(avg_speed_ms * 3.6, 3) if avg_speed_ms else None
-        activity_name = act.get("name", "")
-        workout_sub   = act.get("workout_type", 0)
-        trainer       = int(bool(act.get("trainer", False)))
+        elapsed_sec  = act.get("elapsed_time", 0)
+        end_ts       = start_ts + elapsed_sec
+        duration_min = round(elapsed_sec / 60, 4)
+        distance_m   = act.get("distance", 0)
+        distance_km  = round(distance_m / 1000, 4) if distance_m else None
+        sport_type   = act.get("sport_type") or act.get("type", "")
+        workout_type = WORKOUT_TYPE_MAP.get(sport_type, sport_type)
+        moving_sec   = act.get("moving_time", elapsed_sec)
+        avg_speed_ms = act.get("average_speed")
 
-        wo_rows.append({
-            "workoutType":       workout_type,
-            "duration_min":      duration_min,
-            "distance":          distance_km,
-            "distanceUnit":      "km" if distance_km else None,
-            "activeEnergy_kcal": None,
-            "sourceName":        "Strava",
-            "startDate":         start_str,
-            "endDate":           end_str,
-            "device":            None,
-            "moving_time_min":   moving_min,
-            "elevation_m":       elevation_m,
-            "avg_hr":            avg_hr,
-            "max_hr":            max_hr,
-            "suffer_score":      suffer_score,
-            "avg_cadence":       avg_cadence,
-            "avg_watts":         avg_watts,
-            "avg_speed_kmh":     avg_speed_kmh,
-            "activity_name":     activity_name,
-            "workout_subtype":   workout_sub,
-            "trainer":           trainer,
-        })
+        wo_rows.append((
+            workout_type, start_ts, end_ts, duration_min, distance_km, None,
+            "Strava", None,
+            round(moving_sec / 60, 4),
+            act.get("total_elevation_gain"),
+            act.get("average_heartrate"),
+            act.get("max_heartrate"),
+            act.get("suffer_score"),
+            act.get("average_cadence"),
+            act.get("average_watts"),
+            round(avg_speed_ms * 3.6, 3) if avg_speed_ms else None,
+            act.get("name", ""),
+            act.get("workout_type", 0),
+            int(bool(act.get("trainer", False))),
+        ))
+        existing_ts.append(start_ts)
         added += 1
-        new_wo_row = pd.DataFrame([{"startDate": start_str, "_ts": ts_ns}])
-        wo_existing = pd.concat([wo_existing, new_wo_row], ignore_index=True)
 
+        # Distance record into metrics table
         if sport_type == "Run" and distance_km:
-            if not _near_existing(ts_ns, dwr_existing):
-                dwr_rows.append({
-                    "startDate":  start_str,
-                    "endDate":    end_str,
-                    "value_num":  distance_km,
-                    "unit":       "km",
-                    "sourceName": "Strava",
-                    "device":     None,
-                })
-                new_dwr_row = pd.DataFrame([{"startDate": start_str, "_ts": ts_ns}])
-                dwr_existing = pd.concat([dwr_existing, new_dwr_row], ignore_index=True)
-
-        if sport_type in ("Ride", "VirtualRide") and distance_km:
-            if not _near_existing(ts_ns, cyc_existing):
-                cyc_rows.append({
-                    "startDate":  start_str,
-                    "endDate":    end_str,
-                    "value_num":  distance_km,
-                    "unit":       "km",
-                    "sourceName": "Strava",
-                    "device":     None,
-                })
-                new_cyc_row = pd.DataFrame([{"startDate": start_str, "_ts": ts_ns}])
-                cyc_existing = pd.concat([cyc_existing, new_cyc_row], ignore_index=True)
+            met_rows.append(("DistanceWalkingRunning", start_ts, end_ts, distance_km, "km", "Strava", None))
+        elif sport_type in ("Ride", "VirtualRide") and distance_km:
+            met_rows.append(("DistanceCycling", start_ts, end_ts, distance_km, "km", "Strava", None))
 
     if wo_rows:
-        wo_new = pd.DataFrame(wo_rows)
-        existing_cols = pd.read_csv(workouts_path, nrows=0).columns.tolist()
-        for col in existing_cols:
-            if col not in wo_new.columns:
-                wo_new[col] = np.nan
-        needs_header_update = any(c not in existing_cols for c in wo_new.columns)
-        if needs_header_update:
-            wo_existing_full = pd.read_csv(workouts_path)
-            for col in wo_new.columns:
-                if col not in wo_existing_full.columns:
-                    wo_existing_full[col] = np.nan
-            pd.concat([wo_existing_full, wo_new], ignore_index=True).to_csv(workouts_path, index=False)
-        else:
-            wo_new[existing_cols].to_csv(workouts_path, mode="a", header=False, index=False)
-    if dwr_rows:
-        pd.DataFrame(dwr_rows).to_csv(dwr_path, mode="a", header=False, index=False)
-    if cyc_rows:
-        pd.DataFrame(cyc_rows).to_csv(cyc_path, mode="a", header=False, index=False)
+        conn.executemany("""
+            INSERT OR IGNORE INTO workouts
+            (workout_type,start_ts,end_ts,duration_min,distance_km,active_energy_kcal,
+             source,device,moving_time_min,elevation_m,avg_hr,max_hr,suffer_score,
+             avg_cadence,avg_watts,avg_speed_kmh,activity_name,workout_subtype,trainer)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, wo_rows)
+    if met_rows:
+        conn.executemany(
+            "INSERT OR IGNORE INTO metrics(metric_name,start_ts,end_ts,value,unit,source,device) VALUES(?,?,?,?,?,?,?)",
+            met_rows,
+        )
+    conn.commit()
 
     return added, skipped
 
@@ -206,19 +148,10 @@ def _run_sync_job(force: bool = False):
         cfg = _ensure_valid_token(cfg)
 
         if force:
-            workouts_path = DATA_DIR / "workouts.csv"
-            dwr_path      = DATA_DIR / "by_type" / "DistanceWalkingRunning.csv"
-            cyc_path      = DATA_DIR / "by_type" / "DistanceCycling.csv"
-            for p in [workouts_path, dwr_path, cyc_path]:
-                df = pd.read_csv(p)
-                src_col = "sourceName" if "sourceName" in df.columns else None
-                if src_col:
-                    df = df[df[src_col] != "Strava"]
-                if p == workouts_path:
-                    for col in STRAVA_EXTRA_COLS:
-                        if col not in df.columns:
-                            df[col] = np.nan
-                df.to_csv(p, index=False)
+            conn = _db()
+            conn.execute("DELETE FROM workouts WHERE source='Strava'")
+            conn.execute("DELETE FROM metrics WHERE source='Strava'")
+            conn.commit()
             cfg["last_sync_timestamp"] = 0
             after_ts = 0
         else:
