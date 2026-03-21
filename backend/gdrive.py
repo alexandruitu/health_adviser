@@ -12,7 +12,7 @@ import httpx
 import pandas as pd
 
 from db import _db
-from analytics import _workouts, _by_type, _daily, _sleep
+from analytics import clear_all_caches
 
 GDRIVE_CONFIG_PATH   = Path(__file__).parent.parent / "gdrive_config.json"
 GDRIVE_AUTH_URL      = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -260,10 +260,8 @@ def _ingest_hae_file(content: bytes) -> tuple:
         added   += cur.rowcount
         skipped += len(wo_rows) - cur.rowcount
 
-    # Clear caches so charts refresh
-    _workouts.cache_clear()
-    _by_type.cache_clear()
-    _daily.cache_clear()
+    # Clear all caches so charts refresh
+    clear_all_caches()
 
     return added, skipped
 

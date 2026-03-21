@@ -34,11 +34,11 @@ from analytics import (
     _valid_metrics,
     STRAVA_EXTRA_COLS,
     DATA_DIR,
+    clear_all_caches,
 )
 from health_ingest import (
     _DAILY_AGG,
     HEALTH_METRIC_MAP,
-    _CACHES_TO_CLEAR,
     _load_ingest_config,
     _save_ingest_config,
     _parse_hae_date,
@@ -830,11 +830,7 @@ def health_ingest(payload: dict):
     if new_dates:
         _rebuild_daily_for_dates(new_dates)
 
-    # Clear all caches so next request re-reads updated CSVs
-    for fn_name in _CACHES_TO_CLEAR:
-        fn = globals().get(fn_name)
-        if fn and hasattr(fn, "cache_clear"):
-            fn.cache_clear()
+    clear_all_caches()
 
     cfg = _load_ingest_config()
     cfg["last_ingest"]  = int(time.time())
@@ -875,10 +871,7 @@ async def health_upload(file: UploadFile = File(...)):
     if new_dates:
         _rebuild_daily_for_dates(new_dates)
 
-    for fn_name in _CACHES_TO_CLEAR:
-        fn = globals().get(fn_name)
-        if fn and hasattr(fn, "cache_clear"):
-            fn.cache_clear()
+    clear_all_caches()
 
     cfg = _load_ingest_config()
     cfg["last_ingest"] = int(time.time())

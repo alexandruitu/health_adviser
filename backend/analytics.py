@@ -366,3 +366,17 @@ def _pmc_df() -> pd.DataFrame:
 
     full.index.name = "date"
     return full.reset_index()
+
+
+def clear_all_caches() -> None:
+    """Clear every lru_cache in this module. Call after any data write."""
+    _daily.cache_clear()
+    _sleep.cache_clear()
+    _workouts.cache_clear()
+    _activity.cache_clear()
+    _profile.cache_clear()
+    _by_type.cache_clear()
+    _running_dist_by_day.cache_clear()
+    _cycling_dist_by_day.cache_clear()
+    _pmc_df.cache_clear()
+    _valid_metrics.cache_clear()

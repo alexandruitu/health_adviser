@@ -11,15 +11,7 @@ import httpx
 import numpy as np
 import pandas as pd
 
-from analytics import (
-    DATA_DIR,
-    STRAVA_EXTRA_COLS,
-    _workouts,
-    _running_dist_by_day,
-    _cycling_dist_by_day,
-    _pmc_df,
-    _valid_metrics,
-)
+from analytics import DATA_DIR, STRAVA_EXTRA_COLS, clear_all_caches
 
 STRAVA_CONFIG_PATH  = Path(__file__).parent.parent / "strava_config.json"
 STRAVA_AUTH_URL     = "https://www.strava.com/oauth/authorize"
@@ -255,11 +247,7 @@ def _run_sync_job(force: bool = False):
         cfg["last_sync_timestamp"] = int(time.time())
         _save_strava_config(cfg)
 
-        _workouts.cache_clear()
-        _running_dist_by_day.cache_clear()
-        _cycling_dist_by_day.cache_clear()
-        _pmc_df.cache_clear()
-        _valid_metrics.cache_clear()
+        clear_all_caches()
 
         _sync_job = {"status": "done", "added": added, "skipped": skipped, "error": None}
     except Exception as e:

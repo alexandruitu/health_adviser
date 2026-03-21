@@ -279,7 +279,7 @@ def _ingest_workouts(workouts: list) -> tuple:
 def _rebuild_daily_for_dates(new_dates: set) -> None:
     """Recompute daily_summary.csv rows for the given dates from by_type CSVs."""
     # Import here to avoid circular dependency
-    from analytics import _daily
+    from analytics import clear_all_caches
 
     if not new_dates:
         return
@@ -326,4 +326,4 @@ def _rebuild_daily_for_dates(new_dates: set) -> None:
     ds = pd.concat([ds, new_df], ignore_index=True).sort_values("date")
     ds["date"] = ds["date"].dt.strftime("%Y-%m-%d")
     ds.to_csv(ds_path, index=False)
-    _daily.cache_clear()
+    clear_all_caches()
