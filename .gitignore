@@ -1,0 +1,25 @@
+# Secrets & tokens
+gdrive_config.json
+strava_config.json
+biomarkers_config.json
+
+# Database
+health.db
+*.db-shm
+*.db-wal
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+.DS_Store
+
+# Logs
+*.log
+nohup.out
