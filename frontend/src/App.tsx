@@ -91,22 +91,22 @@ export default function App() {
 
       {/* Main content */}
       <main className="flex-1 p-6 overflow-auto" style={{ position: "relative" }}>
-        {/* Background ambient blobs — give the glass cards something to blur against */}
+        {/* Background ambient blobs — animated aurora behind glass cards */}
         <div aria-hidden style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0, overflow: "hidden" }}>
-          <div style={{
+          <div className="blob-1" style={{
             position: "absolute", top: "-10%", left: "15%",
             width: "55vw", height: "55vw", borderRadius: "50%",
-            background: "radial-gradient(circle, #6366f122 0%, transparent 70%)",
+            background: "radial-gradient(circle, #6366f12e 0%, transparent 70%)",
           }} />
-          <div style={{
+          <div className="blob-2" style={{
             position: "absolute", top: "35%", right: "-5%",
             width: "40vw", height: "40vw", borderRadius: "50%",
-            background: "radial-gradient(circle, #06b6d41a 0%, transparent 70%)",
+            background: "radial-gradient(circle, #06b6d425 0%, transparent 70%)",
           }} />
-          <div style={{
+          <div className="blob-3" style={{
             position: "absolute", bottom: "0%", left: "5%",
             width: "45vw", height: "35vw", borderRadius: "50%",
-            background: "radial-gradient(circle, #8b5cf61a 0%, transparent 70%)",
+            background: "radial-gradient(circle, #8b5cf625 0%, transparent 70%)",
           }} />
         </div>
         <div className="max-w-5xl mx-auto" style={{ position: "relative", zIndex: 1 }}>
