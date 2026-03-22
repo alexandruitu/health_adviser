@@ -298,17 +298,24 @@ def training_volume(
     ds["period"] = _period_col(ds["date"], resolution)
 
     MAX_WORKOUT_MIN = 600
-    wo_valid = wo[wo["duration_min"] <= MAX_WORKOUT_MIN]
+    wo_valid = wo[wo["duration_min"] <= MAX_WORKOUT_MIN].copy()
+
+    # Use moving time when available (matches Strava's displayed time),
+    # fall back to elapsed duration for activities without moving time.
+    wo_valid["active_min"] = wo_valid["moving_time_min"].where(
+        wo_valid["moving_time_min"].notna() & (wo_valid["moving_time_min"] > 0),
+        other=wo_valid["duration_min"],
+    )
 
     run = wo_valid[wo_valid["sport"] == "running"].groupby("period").agg(
-        running_min=("duration_min", "sum"),
-        running_sessions=("duration_min", "count"),
-        longest_run_min=("duration_min", "max"),
+        running_min=("active_min", "sum"),
+        running_sessions=("active_min", "count"),
+        longest_run_min=("active_min", "max"),
     )
     cyc = wo_valid[wo_valid["sport"] == "cycling"].groupby("period").agg(
-        cycling_min=("duration_min", "sum"),
-        cycling_sessions=("duration_min", "count"),
-        longest_ride_min=("duration_min", "max"),
+        cycling_min=("active_min", "sum"),
+        cycling_sessions=("active_min", "count"),
+        longest_ride_min=("active_min", "max"),
     )
     cyc_dist_day = _cycling_dist_by_day()
     if len(cyc_dist_day) > 0:
