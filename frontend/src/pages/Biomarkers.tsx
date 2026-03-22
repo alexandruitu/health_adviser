@@ -396,7 +396,7 @@ function ReviewModal({ extracted, onConfirm, onCancel }: {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export function Biomarkers() {
+export function Biomarkers({ embedded }: { embedded?: boolean } = {}) {
   const [uploads, setUploads]       = useState<BiomarkerUpload[]>([]);
   const [allData, setAllData]       = useState<BiomarkerReading[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -477,14 +477,23 @@ export function Biomarkers() {
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
       {/* ── Header ── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
-        <div>
-          <h1 style={{ fontSize: "1.25rem", fontWeight: 700, color: "#e2e8f0", margin: 0 }}>Biomarkers</h1>
-          <p style={{ fontSize: "0.8rem", color: "#64748b", margin: "2px 0 0" }}>
+        {!embedded && (
+          <div>
+            <h1 style={{ fontSize: "1.25rem", fontWeight: 700, color: "#e2e8f0", margin: 0 }}>Biomarkers</h1>
+            <p style={{ fontSize: "0.8rem", color: "#64748b", margin: "2px 0 0" }}>
+              {latestList.length > 0
+                ? `${latestList.length} markers tracked · ${uploads.length} lab report${uploads.length !== 1 ? "s" : ""}`
+                : "Upload a lab report PDF to start tracking"}
+            </p>
+          </div>
+        )}
+        {embedded && (
+          <p style={{ fontSize: "0.8rem", color: "#64748b", margin: 0 }}>
             {latestList.length > 0
               ? `${latestList.length} markers tracked · ${uploads.length} lab report${uploads.length !== 1 ? "s" : ""}`
               : "Upload a lab report PDF to start tracking"}
           </p>
-        </div>
+        )}
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           {uploadErr && <span style={{ fontSize: "0.75rem", color: "#ef4444" }}>{uploadErr}</span>}
           <input ref={fileRef} type="file" accept=".pdf" style={{ display: "none" }} onChange={handleFile} />

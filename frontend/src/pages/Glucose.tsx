@@ -7,7 +7,7 @@ import { api } from "../api";
 const DEFAULT_START = "2025-11-01";
 const DEFAULT_END = "2025-12-31";
 
-export function Glucose() {
+export function Glucose({ embedded }: { embedded?: boolean } = {}) {
   const [start, setStart] = useState(DEFAULT_START);
   const [end, setEnd] = useState(DEFAULT_END);
 
@@ -26,8 +26,12 @@ export function Glucose() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-semibold" style={{ color: "#e2e8f0" }}>Blood Glucose</h1>
+      {!embedded && (
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <h1 className="text-xl font-semibold" style={{ color: "#e2e8f0" }}>Blood Glucose</h1>
+        </div>
+      )}
+      <div className="flex items-center justify-end flex-wrap gap-3">
         <DateRangePicker start={start} end={end} onChange={(s, e) => { setStart(s); setEnd(e); }} />
       </div>
 

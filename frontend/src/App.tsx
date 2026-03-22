@@ -1,27 +1,23 @@
 import { useState } from "react";
-import { LayoutDashboard, Heart, Activity, Moon, Weight, Droplets, Search, List, FlaskConical, Settings as SettingsIcon } from "lucide-react";
-import { Overview } from "./pages/Overview";
-import { Heart as HeartPage } from "./pages/Heart";
-import { Activity as ActivityPage } from "./pages/Activity";
-import { Activities } from "./pages/Activities";
-import { Sleep } from "./pages/Sleep";
-import { Body } from "./pages/Body";
-import { Glucose } from "./pages/Glucose";
-import { Explorer } from "./pages/Explorer";
-import { Biomarkers } from "./pages/Biomarkers";
-import { Settings } from "./pages/Settings";
-import { IngestToast } from "./components/IngestToast";
+import { LayoutDashboard, Heart, Activity, Moon, Weight, FlaskConical, List, Settings as SettingsIcon, Dumbbell } from "lucide-react";
+import { Overview }            from "./pages/Overview";
+import { Heart as HeartPage }  from "./pages/Heart";
+import { Activity as TrainingPage } from "./pages/Activity";
+import { Activities }          from "./pages/Activities";
+import { Sleep }               from "./pages/Sleep";
+import { Body }                from "./pages/Body";
+import { Labs }                from "./pages/Labs";
+import { Settings }            from "./pages/Settings";
+import { IngestToast }         from "./components/IngestToast";
 
 const PAGES = [
-  { id: "overview",    label: "Overview",    icon: LayoutDashboard, component: Overview },
-  { id: "heart",       label: "Heart",       icon: Heart,           component: HeartPage },
-  { id: "activity",    label: "Activity",    icon: Activity,        component: ActivityPage },
-  { id: "activities",  label: "Activities",  icon: List,            component: Activities },
-  { id: "sleep",       label: "Sleep",       icon: Moon,            component: Sleep },
-  { id: "body",        label: "Body",        icon: Weight,          component: Body },
-  { id: "glucose",     label: "Glucose",     icon: Droplets,        component: Glucose },
-  { id: "biomarkers",  label: "Biomarkers",  icon: FlaskConical,    component: Biomarkers },
-  { id: "explorer",    label: "Explorer",    icon: Search,          component: Explorer },
+  { id: "overview",  label: "Overview",  icon: LayoutDashboard, component: Overview },
+  { id: "heart",     label: "Heart",     icon: Heart,           component: HeartPage },
+  { id: "training",  label: "Training",  icon: Dumbbell,        component: TrainingPage },
+  { id: "log",       label: "Log",       icon: List,            component: Activities },
+  { id: "sleep",     label: "Sleep",     icon: Moon,            component: Sleep },
+  { id: "body",      label: "Body",      icon: Weight,          component: Body },
+  { id: "labs",      label: "Labs",      icon: FlaskConical,    component: Labs },
 ];
 
 const BOTTOM_PAGES = [
@@ -100,7 +96,6 @@ export default function App() {
         </div>
       </main>
 
-      {/* Global Apple Health sync toast — polls every 8s, fires when new data arrives */}
       <IngestToast />
     </div>
   );

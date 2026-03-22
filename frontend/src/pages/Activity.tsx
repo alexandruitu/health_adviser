@@ -685,37 +685,6 @@ export function Activity() {
         </div>
       ) : null}
 
-      {/* ── G: HRV trend ── */}
-      <div style={{ ...SURFACE, padding: "1.25rem" }}>
-        <div style={{ marginBottom: "0.75rem" }}>
-          <SectionTitle>Recovery — HRV (SDNN) Trend</SectionTitle>
-          <div style={{ fontSize: "0.65rem", color: "#64748b" }}>
-            Daily values + 30-day rolling average · rising baseline = aerobic adaptation
-          </div>
-        </div>
-        {hrvLoading ? <Spinner /> : hrvData.length === 0 ? (
-          <div style={{ height: 180, display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b" }}>No HRV data in range</div>
-        ) : (
-          <ResponsiveContainer width="100%" height={200}>
-            <ComposedChart data={hrvData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
-              {grid}
-              <XAxis dataKey="date" {...axisProps} interval="preserveStartEnd"
-                tickFormatter={d => d?.slice(5) ?? ""} />
-              <YAxis {...axisProps} unit=" ms" />
-              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={fmtTip}
-                labelFormatter={l => `Date: ${l}`} />
-              <Legend wrapperStyle={{ fontSize: 11, color: "#64748b" }}
-                formatter={n => n === "hrv" ? "Daily HRV" : "30-day avg"} />
-              <Area type="monotone" dataKey="hrv" name="hrv"
-                fill={HRV_COLOR} stroke={HRV_COLOR} fillOpacity={0.08} strokeOpacity={0.4}
-                dot={false} connectNulls={false} />
-              <Line type="monotone" dataKey="hrv_30d" name="hrv_30d"
-                stroke={HRV_COLOR} strokeWidth={2.5} dot={false} connectNulls />
-            </ComposedChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-
     </div>
   );
 }
