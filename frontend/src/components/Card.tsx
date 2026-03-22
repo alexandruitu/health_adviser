@@ -67,8 +67,10 @@ export function Card({ title, value, unit, subtitle, color = "#6366f1", icon }: 
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        backgroundColor: "#1a1d27",
-        border: "1px solid #2a2d3a",
+        background: "rgba(20, 23, 35, 0.55)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        border: `1px solid ${hovered ? color + "55" : "rgba(255,255,255,0.07)"}`,
         borderRadius: "0.75rem",
         padding: "1rem",
         display: "flex",
@@ -76,8 +78,8 @@ export function Card({ title, value, unit, subtitle, color = "#6366f1", icon }: 
         gap: "0.25rem",
         position: "relative",
         overflow: "hidden",
-        transition: "box-shadow 0.25s ease, transform 0.2s ease",
-        boxShadow: hovered ? `0 0 0 1px ${color}55, 0 4px 24px ${color}33` : "none",
+        transition: "box-shadow 0.25s ease, transform 0.2s ease, border-color 0.25s ease",
+        boxShadow: hovered ? `0 0 0 1px ${color}33, 0 8px 32px ${color}22` : "0 2px 12px rgba(0,0,0,0.3)",
         transform: hovered ? "translateY(-2px)" : "translateY(0)",
         cursor: "default",
       }}

@@ -35,7 +35,7 @@ export default function App() {
       {/* Sidebar */}
       <nav
         className="w-52 flex-shrink-0 flex flex-col py-6 px-3"
-        style={{ backgroundColor: "#13151f", borderRight: "1px solid #2a2d3a", position: "sticky", top: 0, height: "100vh" }}
+        style={{ background: "rgba(13,15,23,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRight: "1px solid rgba(255,255,255,0.06)", position: "sticky", top: 0, height: "100vh" }}
       >
         <div className="px-3 mb-5">
           <div className="text-base font-bold" style={{ color: "#e2e8f0" }}>Health</div>
@@ -90,8 +90,26 @@ export default function App() {
       </nav>
 
       {/* Main content */}
-      <main className="flex-1 p-6 overflow-auto">
-        <div className="max-w-5xl mx-auto">
+      <main className="flex-1 p-6 overflow-auto" style={{ position: "relative" }}>
+        {/* Background ambient blobs — give the glass cards something to blur against */}
+        <div aria-hidden style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0, overflow: "hidden" }}>
+          <div style={{
+            position: "absolute", top: "-10%", left: "15%",
+            width: "55vw", height: "55vw", borderRadius: "50%",
+            background: "radial-gradient(circle, #6366f122 0%, transparent 70%)",
+          }} />
+          <div style={{
+            position: "absolute", top: "35%", right: "-5%",
+            width: "40vw", height: "40vw", borderRadius: "50%",
+            background: "radial-gradient(circle, #06b6d41a 0%, transparent 70%)",
+          }} />
+          <div style={{
+            position: "absolute", bottom: "0%", left: "5%",
+            width: "45vw", height: "35vw", borderRadius: "50%",
+            background: "radial-gradient(circle, #8b5cf61a 0%, transparent 70%)",
+          }} />
+        </div>
+        <div className="max-w-5xl mx-auto" style={{ position: "relative", zIndex: 1 }}>
           <CurrentPage />
         </div>
       </main>
