@@ -39,7 +39,7 @@ export function Overview() {
   const { data: daily, loading: dailyLoading } = useApi(
     () => api.daily({
       start, end,
-      metrics: "StepCount,ActiveEnergyBurned,RestingHeartRate,HeartRateVariabilitySDNN,HRV_Apple,HRV_Garmin,BodyMass,BodyFatPercentage,VO2Max",
+      metrics: "StepCount,ActiveEnergyBurned,RestingHeartRate,HeartRateVariabilitySDNN,HRV_Apple,HRV_Garmin,BodyMass,BodyFatPercentage,VO2Max,VO2MaxCycling",
     }),
     [start, end]
   );
@@ -60,6 +60,7 @@ export function Overview() {
     const weight  = dailyData.map(r => r.BodyMass);
     const fat     = dailyData.map(r => r.BodyFatPercentage);
     const vo2     = dailyData.map(r => r.VO2Max);
+    const vo2cyc  = dailyData.map(r => (r as Record<string, unknown>).VO2MaxCycling as number | undefined);
     const slp     = sleepData.map(r => r.total_sleep_hours);
     const deep    = sleepData.map(r => (r as Record<string, unknown>).Deep as number | undefined);
     const rem     = sleepData.map(r => (r as Record<string, unknown>).REM as number | undefined);
@@ -80,6 +81,7 @@ export function Overview() {
       latestFat:   fmt1(latest(fat)),
       avgFat:      fmt1(avg(fat)),
       latestVO2:   fmt1(latest(vo2)),
+      latestVO2Cyc:fmt1(latest(vo2cyc)),
       sessions:    workouts?.length?.toString() ?? null,
     };
   }, [dailyData, sleepData, workouts]);
@@ -193,12 +195,20 @@ export function Overview() {
           color="#f97316"
         />
         <Card
-          title="VO₂ Max"
+          title="VO₂ Max · Run"
           value={stats.latestVO2}
           unit="mL/kg/min"
-          subtitle={`latest · ${year}`}
+          subtitle={`latest · ${year} · Garmin`}
           icon={<Wind size={14} />}
           color="#06b6d4"
+        />
+        <Card
+          title="VO₂ Max · Cycling"
+          value={stats.latestVO2Cyc}
+          unit="mL/kg/min"
+          subtitle={`latest · ${year} · Garmin`}
+          icon={<Wind size={14} />}
+          color="#0ea5e9"
         />
         <Card
           title="Workouts"

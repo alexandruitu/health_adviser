@@ -347,6 +347,27 @@ def _sync_wellness(start_date: date, end_date: date) -> dict:
             pass
         chunk_start = chunk_end + timedelta(days=1)
 
+    # ── 5. VO2 Max from biometric profile (current snapshot) ─────────────────
+    # Garmin doesn't expose a historical VO2 Max series, so we snapshot the
+    # current value on every sync — over time this builds a sparse history.
+    try:
+        profile = garth.connectapi("/userprofile-service/userprofile/personal-information")
+        bio = profile.get("biometricProfile", {})
+        today_ts = datetime.combine(end_date, datetime.min.time()).timestamp()
+        for metric, val in [
+            ("VO2Max",         bio.get("vo2Max")),
+            ("VO2MaxCycling",  bio.get("vo2MaxCycling")),
+        ]:
+            if val is not None:
+                conn.execute("""
+                    INSERT OR REPLACE INTO metrics
+                    (metric_name, start_ts, end_ts, value, unit, source, device)
+                    VALUES(?, ?, ?, ?, 'mL/kg/min', 'Garmin', NULL)
+                """, (metric, today_ts, today_ts + 86400, float(val)))
+                counts["vo2max"] = counts.get("vo2max", 0) + 1
+    except Exception:
+        pass
+
     conn.commit()
     return counts
 

@@ -67,6 +67,7 @@ def _daily() -> pd.DataFrame:
         "BodyMassIndex":                "AVG",
         "LeanBodyMass":                 "AVG",
         "VO2Max":                       "AVG",
+        "VO2MaxCycling":                "AVG",
         "BloodGlucose":                 "AVG",
         "DistanceWalkingRunning":       "SUM",
         "DistanceCycling":              "SUM",
