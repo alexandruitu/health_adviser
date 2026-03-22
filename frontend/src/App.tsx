@@ -109,7 +109,7 @@ export default function App() {
             background: "radial-gradient(circle, #8b5cf625 0%, transparent 70%)",
           }} />
         </div>
-        <div className="max-w-5xl mx-auto" style={{ position: "relative", zIndex: 1 }}>
+        <div key={page} className="page-enter max-w-5xl mx-auto" style={{ position: "relative", zIndex: 1 }}>
           <CurrentPage />
         </div>
       </main>
