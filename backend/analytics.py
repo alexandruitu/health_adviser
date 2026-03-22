@@ -74,6 +74,9 @@ def _daily() -> pd.DataFrame:
         "FlightsClimbed":               "SUM",
         "AppleExerciseTime":            "SUM",
         "MindfulSession":               "SUM",
+        "WalkingHeartRateAverage":      "AVG",
+        "BloodPressureSystolic":        "AVG",
+        "BloodPressureDiastolic":       "AVG",
     }
     base = pd.date_range(
         start=pd.Timestamp("2012-01-01"),
@@ -93,6 +96,19 @@ def _daily() -> pd.DataFrame:
         """
         tmp = pd.read_sql_query(q, conn, params=(metric,))
         tmp.columns = ["date", metric]
+        df = df.merge(tmp, on="date", how="left")
+
+    # HeartRate mean / min / max (individual readings — 3 aggs on same metric)
+    for suffix, agg in [("mean", "AVG"), ("min", "MIN"), ("max", "MAX")]:
+        q = f"""
+            SELECT date(datetime(start_ts, 'unixepoch')) AS day,
+                   {agg}(value) AS val
+            FROM metrics
+            WHERE metric_name = 'HeartRate'
+            GROUP BY day
+        """
+        tmp = pd.read_sql_query(q, conn)
+        tmp.columns = ["date", f"HeartRate_{suffix}"]
         df = df.merge(tmp, on="date", how="left")
 
     # Per-source HRV: Garmin (overnight) vs Apple Health / Elite HRV (all non-Garmin)

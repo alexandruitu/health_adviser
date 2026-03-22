@@ -5,26 +5,31 @@ import { useApi } from "../hooks/useApi";
 import { api } from "../api";
 
 const DEFAULT_START = `${new Date().getFullYear()}-01-01`;
-const DEFAULT_END = new Date().toISOString().slice(0, 10);
+const DEFAULT_END   = new Date().toISOString().slice(0, 10);
+
+// Blood pressure data only exists Oct–Dec 2024
+const BP_START = "2024-10-01";
+const BP_END   = "2024-12-31";
 
 export function Heart() {
   const [start, setStart] = useState(DEFAULT_START);
-  const [end, setEnd] = useState(DEFAULT_END);
-
-  const params = { start, end };
+  const [end,   setEnd]   = useState(DEFAULT_END);
 
   const { data: daily, loading } = useApi(
-    () => api.daily({ ...params, metrics: "HeartRate_mean,HeartRate_min,HeartRate_max,RestingHeartRate,HeartRateVariabilitySDNN,WalkingHeartRateAverage" }),
+    () => api.daily({
+      start, end,
+      metrics: "HeartRate_mean,HeartRate_min,HeartRate_max,RestingHeartRate,HeartRateVariabilitySDNN,WalkingHeartRateAverage",
+    }),
     [start, end]
   );
 
-  const { data: bpData } = useApi(
-    () => api.daily({ ...params, metrics: "BloodPressureSystolic_mean,BloodPressureDiastolic_mean" }),
-    [start, end]
+  const { data: bpData, loading: bpLoading } = useApi(
+    () => api.daily({ start: BP_START, end: BP_END, metrics: "BloodPressureSystolic,BloodPressureDiastolic" }),
+    []
   );
 
   const data = daily ?? [];
-  const bp = bpData ?? [];
+  const bp   = (bpData ?? []).filter((d: Record<string, unknown>) => d.BloodPressureSystolic != null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -39,8 +44,8 @@ export function Heart() {
           data={data}
           series={[
             { key: "HeartRate_mean", color: "#f43f5e", name: "Mean" },
-            { key: "HeartRate_min",  color: "#10b981", name: "Min" },
-            { key: "HeartRate_max",  color: "#f97316", name: "Max" },
+            { key: "HeartRate_max",  color: "#f97316", name: "Max"  },
+            { key: "HeartRate_min",  color: "#10b981", name: "Min"  },
           ]}
           unit="bpm"
           chartType="line"
@@ -73,15 +78,15 @@ export function Heart() {
           loading={loading}
         />
         <ChartPanel
-          title="Blood pressure"
-          data={bp.filter(d => d.BloodPressureSystolic_mean != null)}
+          title="Blood pressure · Oct–Dec 2024"
+          data={bp}
           series={[
-            { key: "BloodPressureSystolic_mean",  color: "#ef4444", name: "Systolic" },
-            { key: "BloodPressureDiastolic_mean", color: "#f97316", name: "Diastolic" },
+            { key: "BloodPressureSystolic",  color: "#ef4444", name: "Systolic"  },
+            { key: "BloodPressureDiastolic", color: "#f97316", name: "Diastolic" },
           ]}
           unit="mmHg"
           chartType="line"
-          loading={loading}
+          loading={bpLoading}
         />
       </div>
     </div>
