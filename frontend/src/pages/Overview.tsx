@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Heart, Footprints, Flame, Moon, Weight, Activity, Wind, Dumbbell } from "lucide-react";
+import { Heart, Footprints, Flame, Moon, Weight, Activity, Wind, Dumbbell, Bike, PersonStanding } from "lucide-react";
 import { Card } from "../components/Card";
 import { ChartPanel } from "../components/ChartPanel";
 import { useApi } from "../hooks/useApi";
@@ -46,45 +46,54 @@ export function Overview() {
   const { data: sleep } = useApi(() => api.sleep({ start, end }), [start, end]);
   const { data: workouts } = useApi(() => api.workouts({ start, end }), [start, end]);
 
-  const dailyData = daily ?? [];
-  const sleepData = sleep ?? [];
+  const dailyData  = daily ?? [];
+  const sleepData  = sleep ?? [];
+  const workoutArr = workouts ?? [];
 
-  // ── compute card values from year-filtered data ───────────────────────────
+  // ── compute card values ───────────────────────────────────────────────────
   const stats = useMemo(() => {
-    const steps   = dailyData.map(r => r.StepCount);
-    const energy  = dailyData.map(r => r.ActiveEnergyBurned);
-    const rhr     = dailyData.map(r => r.RestingHeartRate);
-    const hrv        = dailyData.map(r => r.HeartRateVariabilitySDNN);
-    const hrvApple   = dailyData.map(r => (r as Record<string, unknown>).HRV_Apple as number | undefined);
-    const hrvGarmin  = dailyData.map(r => (r as Record<string, unknown>).HRV_Garmin as number | undefined);
-    const weight  = dailyData.map(r => r.BodyMass);
-    const fat     = dailyData.map(r => r.BodyFatPercentage);
-    const vo2     = dailyData.map(r => r.VO2Max);
-    const vo2cyc  = dailyData.map(r => (r as Record<string, unknown>).VO2MaxCycling as number | undefined);
-    const slp     = sleepData.map(r => r.total_sleep_hours);
-    const deep    = sleepData.map(r => (r as Record<string, unknown>).Deep as number | undefined);
-    const rem     = sleepData.map(r => (r as Record<string, unknown>).REM as number | undefined);
-    const core    = sleepData.map(r => (r as Record<string, unknown>).Core as number | undefined);
+    const steps     = dailyData.map(r => r.StepCount);
+    const energy    = dailyData.map(r => r.ActiveEnergyBurned);
+    const rhr       = dailyData.map(r => r.RestingHeartRate);
+    const hrvApple  = dailyData.map(r => (r as Record<string, unknown>).HRV_Apple as number | undefined);
+    const hrvGarmin = dailyData.map(r => (r as Record<string, unknown>).HRV_Garmin as number | undefined);
+    const weight    = dailyData.map(r => r.BodyMass);
+    const fat       = dailyData.map(r => r.BodyFatPercentage);
+    const vo2       = dailyData.map(r => r.VO2Max);
+    const vo2cyc    = dailyData.map(r => (r as Record<string, unknown>).VO2MaxCycling as number | undefined);
+    const slp       = sleepData.map(r => r.total_sleep_hours);
+    const deep      = sleepData.map(r => (r as Record<string, unknown>).Deep as number | undefined);
+    const rem       = sleepData.map(r => (r as Record<string, unknown>).REM  as number | undefined);
+    const core      = sleepData.map(r => (r as Record<string, unknown>).Core as number | undefined);
+
+    const runKm  = workoutArr
+      .filter(r => r.workoutType === "Running")
+      .reduce((s, r) => s + ((r as Record<string, unknown>).distance as number ?? 0), 0);
+    const cycKm  = workoutArr
+      .filter(r => r.workoutType === "Cycling")
+      .reduce((s, r) => s + ((r as Record<string, unknown>).distance as number ?? 0), 0);
+
     return {
-      avgSteps:    fmtInt(avg(steps)),
-      avgEnergy:   fmt1(avg(energy)),
-      avgRHR:      fmt1(avg(rhr)),
-      avgHRV:      fmt1(avg(hrv)),
-      avgHRVApple: fmt1(avg(hrvApple)),
-      avgHRVGarmin:fmt1(avg(hrvGarmin)),
-      avgSleep:    fmt1(avg(slp)),
-      avgDeep:     fmt1(avg(deep)),
-      avgREM:      fmt1(avg(rem)),
-      avgCore:     fmt1(avg(core)),
-      latestWeight:fmt1(latest(weight)),
-      avgWeight:   fmt1(avg(weight)),
-      latestFat:   fmt1(latest(fat)),
-      avgFat:      fmt1(avg(fat)),
-      latestVO2:   fmt1(latest(vo2)),
-      latestVO2Cyc:fmt1(latest(vo2cyc)),
-      sessions:    workouts?.length?.toString() ?? null,
+      avgSteps:     fmtInt(avg(steps)),
+      avgEnergy:    fmt1(avg(energy)),
+      avgRHR:       fmt1(avg(rhr)),
+      avgHRVApple:  fmt1(avg(hrvApple)),
+      avgHRVGarmin: fmt1(avg(hrvGarmin)),
+      avgSleep:     fmt1(avg(slp)),
+      avgDeep:      fmt1(avg(deep)),
+      avgREM:       fmt1(avg(rem)),
+      avgCore:      fmt1(avg(core)),
+      latestWeight: fmt1(latest(weight)),
+      avgWeight:    fmt1(avg(weight)),
+      latestFat:    fmt1(latest(fat)),
+      avgFat:       fmt1(avg(fat)),
+      latestVO2:    fmt1(latest(vo2)),
+      latestVO2Cyc: fmt1(latest(vo2cyc)),
+      sessions:     workoutArr.length.toString(),
+      runKm:        fmtInt(runKm > 0 ? runKm : null),
+      cycKm:        fmtInt(cycKm > 0 ? cycKm : null),
     };
-  }, [dailyData, sleepData, workouts]);
+  }, [dailyData, sleepData, workoutArr]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -113,140 +122,37 @@ export function Overview() {
         </div>
       </div>
 
-      {/* Summary cards — year-filtered averages */}
+      {/* Summary cards — 4×4 grid, grouped by theme */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card
-          title="Daily steps"
-          value={stats.avgSteps}
-          subtitle={`avg · ${year}`}
-          icon={<Footprints size={14} />}
-          color="#6366f1"
-        />
-        <Card
-          title="Resting HR"
-          value={stats.avgRHR}
-          unit="bpm"
-          subtitle={`avg · ${year}`}
-          icon={<Heart size={14} />}
-          color="#f43f5e"
-        />
-        <Card
-          title="HRV · Apple Health"
-          value={stats.avgHRVApple}
-          unit="ms"
-          subtitle={`avg · ${year}`}
-          icon={<Activity size={14} />}
-          color="#10b981"
-        />
-        <Card
-          title="HRV · Garmin"
-          value={stats.avgHRVGarmin}
-          unit="ms"
-          subtitle={`avg · ${year}`}
-          icon={<Activity size={14} />}
-          color="#06b6d4"
-        />
-        <Card
-          title="Sleep"
-          value={stats.avgSleep}
-          unit="hrs"
-          subtitle={`avg · ${year}`}
-          icon={<Moon size={14} />}
-          color="#8b5cf6"
-        />
-        <Card
-          title="Deep sleep"
-          value={stats.avgDeep}
-          unit="hrs"
-          subtitle={`avg · ${year}`}
-          icon={<Moon size={14} />}
-          color="#4f46e5"
-        />
-        <Card
-          title="REM sleep"
-          value={stats.avgREM}
-          unit="hrs"
-          subtitle={`avg · ${year}`}
-          icon={<Moon size={14} />}
-          color="#7c3aed"
-        />
-        <Card
-          title="Core sleep"
-          value={stats.avgCore}
-          unit="hrs"
-          subtitle={`avg · ${year}`}
-          icon={<Moon size={14} />}
-          color="#a855f7"
-        />
-        <Card
-          title="Weight"
-          value={stats.avgWeight}
-          unit="kg"
-          subtitle={`avg · ${year}  ·  latest ${stats.latestWeight ?? "—"} kg`}
-          icon={<Weight size={14} />}
-          color="#f59e0b"
-        />
-        <Card
-          title="Body fat"
-          value={stats.avgFat}
-          unit="%"
-          subtitle={`avg · ${year}  ·  latest ${stats.latestFat ?? "—"}%`}
-          icon={<Weight size={14} />}
-          color="#f97316"
-        />
-        <Card
-          title="VO₂ Max · Run"
-          value={stats.latestVO2}
-          unit="mL/kg/min"
-          subtitle={`latest · ${year} · Garmin`}
-          icon={<Wind size={14} />}
-          color="#06b6d4"
-        />
-        <Card
-          title="VO₂ Max · Cycling"
-          value={stats.latestVO2Cyc}
-          unit="mL/kg/min"
-          subtitle={`latest · ${year} · Garmin`}
-          icon={<Wind size={14} />}
-          color="#0ea5e9"
-        />
-        <Card
-          title="Workouts"
-          value={stats.sessions}
-          subtitle={`sessions · ${year}`}
-          icon={<Dumbbell size={14} />}
-          color="#84cc16"
-        />
-        <Card
-          title="Active energy"
-          value={stats.avgEnergy}
-          unit="kcal"
-          subtitle={`avg · ${year}`}
-          icon={<Flame size={14} />}
-          color="#ef4444"
-        />
+
+        {/* ── Row 1: Cardiovascular & Recovery ── */}
+        <Card title="Resting HR"       value={stats.avgRHR}       unit="bpm"        subtitle={`avg · ${year}`}           icon={<Heart size={14} />}          color="#f43f5e" />
+        <Card title="HRV · Apple Health" value={stats.avgHRVApple} unit="ms"         subtitle={`avg · ${year}`}           icon={<Activity size={14} />}       color="#10b981" />
+        <Card title="HRV · Garmin"     value={stats.avgHRVGarmin} unit="ms"          subtitle={`avg · ${year}`}           icon={<Activity size={14} />}       color="#06b6d4" />
+        <Card title="Sleep"            value={stats.avgSleep}     unit="hrs"         subtitle={`avg · ${year}`}           icon={<Moon size={14} />}           color="#8b5cf6" />
+
+        {/* ── Row 2: Sleep detail + daily burn ── */}
+        <Card title="Deep sleep"       value={stats.avgDeep}      unit="hrs"         subtitle={`avg · ${year}`}           icon={<Moon size={14} />}           color="#4f46e5" />
+        <Card title="REM sleep"        value={stats.avgREM}       unit="hrs"         subtitle={`avg · ${year}`}           icon={<Moon size={14} />}           color="#7c3aed" />
+        <Card title="Core sleep"       value={stats.avgCore}      unit="hrs"         subtitle={`avg · ${year}`}           icon={<Moon size={14} />}           color="#a855f7" />
+        <Card title="Active energy"    value={stats.avgEnergy}    unit="kcal"        subtitle={`avg · ${year}`}           icon={<Flame size={14} />}          color="#ef4444" />
+
+        {/* ── Row 3: Body composition & Performance ── */}
+        <Card title="Weight"           value={stats.avgWeight}    unit="kg"          subtitle={`avg · ${year}  ·  latest ${stats.latestWeight ?? "—"} kg`} icon={<Weight size={14} />} color="#f59e0b" />
+        <Card title="Body fat"         value={stats.avgFat}       unit="%"           subtitle={`avg · ${year}  ·  latest ${stats.latestFat ?? "—"}%`}      icon={<Weight size={14} />} color="#f97316" />
+        <Card title="VO₂ Max · Run"    value={stats.latestVO2}    unit="mL/kg/min"   subtitle={`latest · ${year} · Garmin`} icon={<Wind size={14} />}         color="#06b6d4" />
+        <Card title="VO₂ Max · Cycling" value={stats.latestVO2Cyc} unit="mL/kg/min" subtitle={`latest · ${year} · Garmin`} icon={<Wind size={14} />}         color="#0ea5e9" />
+
+        {/* ── Row 4: Activity volume ── */}
+        <Card title="Daily steps"      value={stats.avgSteps}                        subtitle={`avg · ${year}`}           icon={<Footprints size={14} />}     color="#6366f1" />
+        <Card title="Workouts"         value={stats.sessions}                        subtitle={`sessions · ${year}`}      icon={<Dumbbell size={14} />}       color="#84cc16" />
+        <Card title="Running distance" value={stats.runKm}        unit="km"          subtitle={`total · ${year}`}         icon={<PersonStanding size={14} />} color="#f43f5e" />
+        <Card title="Cycling distance" value={stats.cycKm}        unit="km"          subtitle={`total · ${year}`}         icon={<Bike size={14} />}           color="#f59e0b" />
+
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ChartPanel
-          title={`Daily steps (${year})`}
-          data={dailyData}
-          series={[{ key: "StepCount", color: "#6366f1" }]}
-          unit="steps"
-          chartType="bar"
-          loading={dailyLoading}
-          syncId="overview"
-        />
-        <ChartPanel
-          title={`Active energy (${year})`}
-          data={dailyData}
-          series={[{ key: "ActiveEnergyBurned", color: "#ef4444" }]}
-          unit="kcal"
-          chartType="area"
-          loading={dailyLoading}
-          syncId="overview"
-        />
         <ChartPanel
           title={`Resting heart rate (${year})`}
           data={dailyData}
@@ -259,7 +165,7 @@ export function Overview() {
           title={`HRV — SDNN (${year})`}
           data={dailyData}
           series={[
-            { key: "HRV_Apple",  color: "#10b981", name: "Apple Watch" },
+            { key: "HRV_Apple",  color: "#10b981", name: "Apple Health" },
             { key: "HRV_Garmin", color: "#06b6d4", name: "Garmin" },
           ]}
           unit="ms"
@@ -275,12 +181,30 @@ export function Overview() {
           chartType="bar"
         />
         <ChartPanel
+          title={`Active energy (${year})`}
+          data={dailyData}
+          series={[{ key: "ActiveEnergyBurned", color: "#ef4444" }]}
+          unit="kcal"
+          chartType="area"
+          loading={dailyLoading}
+          syncId="overview"
+        />
+        <ChartPanel
           title={`Body weight (${year})`}
           data={dailyData}
           series={[{ key: "BodyMass", color: "#f59e0b" }]}
           unit="kg"
           chartType="line"
           loading={dailyLoading}
+        />
+        <ChartPanel
+          title={`Daily steps (${year})`}
+          data={dailyData}
+          series={[{ key: "StepCount", color: "#6366f1" }]}
+          unit="steps"
+          chartType="bar"
+          loading={dailyLoading}
+          syncId="overview"
         />
       </div>
     </div>
