@@ -1,5 +1,6 @@
 import { StravaSync } from "../components/StravaSync";
 import { HealthSync } from "../components/HealthSync";
+import { GarminSync } from "../components/GarminSync";
 
 export function Settings() {
   return (
@@ -17,6 +18,7 @@ export function Settings() {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           <StravaSync />
+          <GarminSync />
           <HealthSync />
         </div>
       </div>

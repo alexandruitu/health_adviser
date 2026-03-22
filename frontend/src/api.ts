@@ -237,6 +237,26 @@ export const api = {
     }
     return res.json();
   },
+  // Garmin Connect integration
+  garminStatus: () => get<GarminStatus>("/garmin/status"),
+  garminConnect: (email: string, password: string): Promise<{ connected: boolean; email: string }> =>
+    fetch("/api/garmin/connect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    }).then(async r => {
+      if (!r.ok) { const e = await r.json(); throw new Error(e.detail || "Login failed"); }
+      return r.json();
+    }),
+  garminDisconnect: (): Promise<{ connected: boolean }> =>
+    fetch("/api/garmin/disconnect", { method: "POST" }).then(r => r.json()),
+  garminSync: (force = false): Promise<{ status: string }> =>
+    fetch(`/api/garmin/sync${force ? "?force=true" : ""}`, { method: "POST" }).then(r => {
+      if (!r.ok) throw new Error(`Sync failed: ${r.status}`);
+      return r.json();
+    }),
+  garminSyncStatus: () =>
+    get<SyncResult & { status: string; error: string | null }>("/garmin/sync/status"),
 };
 
 export interface BiomarkerUpload {
@@ -279,4 +299,15 @@ export interface BiomarkersExtracted {
   lab_name: string | null;
   markers: ExtractedMarker[];
   count: number;
+}
+
+export interface GarminStatus {
+  connected: boolean;
+  email: string | null;
+  last_sync: number | null;
+}
+
+export interface SyncResult {
+  added: number;
+  skipped: number;
 }

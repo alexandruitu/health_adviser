@@ -77,6 +77,15 @@ from biomarkers import (
     _load_biomarkers_config,
     _extract_biomarkers_via_claude,
 )
+from garmin import (
+    _load_garmin_config,
+    _save_garmin_config,
+    _login as _garmin_login,
+    _resume_session as _garmin_resume,
+    _run_garmin_sync,
+    _garmin_sync_job,
+    GARMIN_CONFIG_PATH,
+)
 
 # ─── constants kept in main (OAuth redirect URIs used directly in routes) ────
 STRAVA_AUTH_URL     = "https://www.strava.com/oauth/authorize"
@@ -90,7 +99,7 @@ GDRIVE_SCOPES       = "https://www.googleapis.com/auth/drive.readonly"
 app = FastAPI(title="Apple Health API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:4173"],
+    allow_origins=["http://localhost:5173", "http://localhost:4173", "http://localhost:5174"],
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
 )
@@ -790,6 +799,66 @@ def gdrive_sync(background_tasks: BackgroundTasks):
 def gdrive_sync_status():
     import gdrive as _gdrive
     return _gdrive._gdrive_sync_job
+
+
+# ─── Garmin Connect integration ───────────────────────────────────────────────
+
+@app.get("/api/garmin/status")
+def garmin_status():
+    cfg = _load_garmin_config()
+    connected = False
+    if cfg.get("email"):
+        try:
+            connected = _garmin_resume()
+        except Exception:
+            connected = False
+    return {
+        "connected": connected,
+        "email": cfg.get("email") if connected else None,
+        "last_sync": cfg.get("last_sync_timestamp"),
+    }
+
+
+@app.post("/api/garmin/connect")
+def garmin_connect(body: dict):
+    email    = body.get("email", "").strip()
+    password = body.get("password", "").strip()
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="Email and password are required")
+    try:
+        _garmin_login(email, password)
+        cfg = _load_garmin_config()
+        cfg["email"] = email
+        _save_garmin_config(cfg)
+        return {"connected": True, "email": email}
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Garmin login failed: {e}")
+
+
+@app.post("/api/garmin/disconnect")
+def garmin_disconnect():
+    import shutil
+    from garmin import GARMIN_TOKEN_DIR
+    if GARMIN_TOKEN_DIR.exists():
+        shutil.rmtree(str(GARMIN_TOKEN_DIR))
+    if GARMIN_CONFIG_PATH.exists():
+        GARMIN_CONFIG_PATH.write_text("{}")
+    return {"connected": False}
+
+
+@app.post("/api/garmin/sync")
+def garmin_sync(background_tasks: BackgroundTasks, force: bool = False):
+    import garmin as _garmin
+    if _garmin._garmin_sync_job.get("status") == "running":
+        return {"status": "already_running"}
+    background_tasks.add_task(_run_garmin_sync, force)
+    return {"status": "started"}
+
+
+@app.get("/api/garmin/sync/status")
+def garmin_sync_status():
+    import garmin as _garmin
+    return _garmin._garmin_sync_job
 
 
 # ─── Apple Health Auto Export ingest ─────────────────────────────────────────
