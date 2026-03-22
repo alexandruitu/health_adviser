@@ -89,6 +89,14 @@ def _append_activities(activities: list) -> tuple:
         moving_sec   = act.get("moving_time", elapsed_sec)
         avg_speed_ms = act.get("average_speed")
 
+        # Strava takes priority — remove any Garmin activity for same session
+        conn.execute("""
+            DELETE FROM workouts
+            WHERE source='Garmin'
+              AND workout_type=?
+              AND ABS(start_ts - ?) < 300
+        """, (workout_type, start_ts))
+
         cur = conn.execute("""
             INSERT OR IGNORE INTO workouts
             (workout_type,start_ts,end_ts,duration_min,distance_km,active_energy_kcal,

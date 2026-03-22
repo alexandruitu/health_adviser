@@ -2,10 +2,17 @@
 Garmin Connect integration using the garth library.
 Uses email/password auth (Garmin does not expose a public OAuth API).
 Tokens are persisted in garth_tokens/ directory next to this file.
+
+Activity priority: Strava > Garmin.
+When a Strava activity is imported, any Garmin activity within 5 min of the
+same type is automatically removed (Strava has richer analysis).
+
+Garmin is used for wellness data not available on Strava:
+  sleep stages, overnight HRV, stress, body battery.
 """
 import json
 import time
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -51,6 +58,9 @@ GARMIN_TYPE_MAP = {
     "other":                "Other",
 }
 
+# How close (seconds) a Garmin activity must be to a Strava one to be replaced
+_STRAVA_PRIORITY_WINDOW = 5 * 60   # 5 minutes
+
 
 # ─── config ──────────────────────────────────────────────────────────────────
 
@@ -74,7 +84,6 @@ def _resume_session() -> bool:
         return False
     try:
         garth.resume(str(GARMIN_TOKEN_DIR))
-        # Light check: confirm we have an oauth2 token
         return garth.client.oauth2_token is not None
     except Exception:
         return False
@@ -99,28 +108,27 @@ def is_connected() -> bool:
     return _resume_session()
 
 
-# ─── data ingestion ───────────────────────────────────────────────────────────
+# ─── activity ingestion ───────────────────────────────────────────────────────
 
 def _append_garmin_activities(activities: list) -> tuple:
-    """Insert Garmin activities into SQLite (workouts + metrics tables)."""
+    """Insert Garmin activities, skipping any that already have a Strava match.
+
+    Deduplication is by UNIQUE(start_ts, workout_type) in the DB.
+    Activities already imported from Strava within 5 min are skipped
+    (Strava data takes priority — richer analysis).
+    """
     conn = _db()
-    _90min_s = 90 * 60
-
-    existing_ts = [
-        r[0] for r in conn.execute(
-            "SELECT start_ts FROM workouts WHERE source='Garmin'"
-        ).fetchall()
-    ]
-
-    def _near_existing(ts: float) -> bool:
-        return any(abs(e - ts) < _90min_s for e in existing_ts)
-
-    wo_rows  = []
-    met_rows = []
     added = skipped = 0
 
+    # Load Strava timestamps once for priority check
+    strava_ts = [
+        r[0] for r in conn.execute("SELECT start_ts FROM workouts WHERE source='Strava'").fetchall()
+    ]
+
+    def _has_strava_match(ts: float) -> bool:
+        return any(abs(s - ts) < _STRAVA_PRIORITY_WINDOW for s in strava_ts)
+
     for act in activities:
-        # Parse start time
         start_str = act.get("startTimeLocal") or act.get("startTimeGMT", "")
         try:
             dt = datetime.strptime(start_str, "%Y-%m-%d %H:%M:%S")
@@ -129,31 +137,33 @@ def _append_garmin_activities(activities: list) -> tuple:
             continue
 
         start_ts = dt.timestamp()
-        if _near_existing(start_ts):
+
+        # Skip if Strava already has this activity (Strava wins)
+        if _has_strava_match(start_ts):
             skipped += 1
             continue
 
-        # Activity type
         type_info    = act.get("activityType") or {}
         type_key     = type_info.get("typeKey", "other") if isinstance(type_info, dict) else "other"
         workout_type = GARMIN_TYPE_MAP.get(type_key, type_key)
 
-        # Duration / distance
-        duration_sec = act.get("duration") or 0
-        moving_sec   = act.get("movingDuration") or duration_sec
-        end_ts       = start_ts + duration_sec
-        duration_min = round(duration_sec / 60, 4)
-        distance_m   = act.get("distance") or 0
-        distance_km  = round(distance_m / 1000, 4) if distance_m else None
-
-        # Speed
-        avg_speed_ms = act.get("averageSpeed")
+        duration_sec  = act.get("duration") or 0
+        moving_sec    = act.get("movingDuration") or duration_sec
+        end_ts        = start_ts + duration_sec
+        duration_min  = round(duration_sec / 60, 4)
+        distance_m    = act.get("distance") or 0
+        distance_km   = round(distance_m / 1000, 4) if distance_m else None
+        avg_speed_ms  = act.get("averageSpeed")
         avg_speed_kmh = round(avg_speed_ms * 3.6, 3) if avg_speed_ms else None
+        cadence       = act.get("averageCadence") or act.get("avgBikeCadence")
 
-        # Cadence — Garmin uses different keys depending on sport
-        cadence = act.get("averageCadence") or act.get("avgBikeCadence")
-
-        wo_rows.append((
+        cur = conn.execute("""
+            INSERT OR IGNORE INTO workouts
+            (workout_type,start_ts,end_ts,duration_min,distance_km,active_energy_kcal,
+             source,device,moving_time_min,elevation_m,avg_hr,max_hr,suffer_score,
+             avg_cadence,avg_watts,avg_speed_kmh,activity_name,workout_subtype,trainer)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
             workout_type, start_ts, end_ts, duration_min, distance_km,
             act.get("calories"),
             "Garmin", None,
@@ -161,36 +171,30 @@ def _append_garmin_activities(activities: list) -> tuple:
             act.get("elevationGain"),
             act.get("averageHR"),
             act.get("maxHR"),
-            None,   # suffer_score — Garmin uses trainingEffect instead
+            None,
             cadence,
             act.get("averagePower"),
             avg_speed_kmh,
             act.get("activityName", ""),
             type_key,
-            0,      # trainer flag — default off
+            0,
         ))
-        existing_ts.append(start_ts)
-        added += 1
 
-        # Mirror distance into metrics table (same pattern as Strava)
-        if type_key in ("running", "trail_running", "treadmill_running", "track_running") and distance_km:
-            met_rows.append(("DistanceWalkingRunning", start_ts, end_ts, distance_km, "km", "Garmin", None))
-        elif "cycling" in type_key or type_key in ("virtual_ride", "gravel_cycling", "mountain_biking") and distance_km:
-            met_rows.append(("DistanceCycling", start_ts, end_ts, distance_km, "km", "Garmin", None))
+        if cur.rowcount:
+            added += 1
+            if type_key in ("running", "trail_running", "treadmill_running", "track_running") and distance_km:
+                conn.execute(
+                    "INSERT OR IGNORE INTO metrics(metric_name,start_ts,end_ts,value,unit,source,device) VALUES(?,?,?,?,?,?,?)",
+                    ("DistanceWalkingRunning", start_ts, end_ts, distance_km, "km", "Garmin", None),
+                )
+            elif ("cycling" in type_key or type_key in ("virtual_ride", "gravel_cycling", "mountain_biking")) and distance_km:
+                conn.execute(
+                    "INSERT OR IGNORE INTO metrics(metric_name,start_ts,end_ts,value,unit,source,device) VALUES(?,?,?,?,?,?,?)",
+                    ("DistanceCycling", start_ts, end_ts, distance_km, "km", "Garmin", None),
+                )
+        else:
+            skipped += 1
 
-    if wo_rows:
-        conn.executemany("""
-            INSERT OR IGNORE INTO workouts
-            (workout_type,start_ts,end_ts,duration_min,distance_km,active_energy_kcal,
-             source,device,moving_time_min,elevation_m,avg_hr,max_hr,suffer_score,
-             avg_cadence,avg_watts,avg_speed_kmh,activity_name,workout_subtype,trainer)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        """, wo_rows)
-    if met_rows:
-        conn.executemany(
-            "INSERT OR IGNORE INTO metrics(metric_name,start_ts,end_ts,value,unit,source,device) VALUES(?,?,?,?,?,?,?)",
-            met_rows,
-        )
     conn.commit()
     return added, skipped
 
@@ -204,7 +208,6 @@ def _fetch_activities(after_ts: float) -> list:
     while True:
         params: dict = {"start": start, "limit": limit}
         if after_ts:
-            # Garmin API accepts startDate as "YYYY-MM-DD"
             after_dt = datetime.fromtimestamp(after_ts)
             params["startDate"] = after_dt.strftime("%Y-%m-%d")
 
@@ -220,13 +223,132 @@ def _fetch_activities(after_ts: float) -> list:
             break
 
         activities.extend(batch)
-
-        # If we got fewer than limit, we've hit the end
         if len(batch) < limit:
             break
         start += limit
 
     return activities
+
+
+# ─── wellness ingestion ───────────────────────────────────────────────────────
+
+def _sync_wellness(start_date: date, end_date: date) -> dict:
+    """
+    Fetch Garmin wellness data for the given date range and store in DB.
+    Covers: sleep stages, overnight HRV, stress, body battery.
+    Returns counts per category.
+    """
+    conn = _db()
+    counts = {"sleep_rows": 0, "hrv_rows": 0, "stress_rows": 0, "body_battery_rows": 0}
+
+    # ── 1. Sleep stages via SleepData.get() ──────────────────────────────────
+    current = start_date
+    while current <= end_date:
+        try:
+            sd = garth.SleepData.get(current)
+            if sd and sd.daily_sleep_dto:
+                dto = sd.daily_sleep_dto
+                date_str = str(dto.calendar_date)
+                start_ms = dto.sleep_start_timestamp_gmt
+                end_ms   = dto.sleep_end_timestamp_gmt
+                start_ts = start_ms / 1000
+                end_ts   = end_ms / 1000
+
+                stages = [
+                    ("Deep",  dto.deep_sleep_seconds),
+                    ("Core",  dto.light_sleep_seconds),   # Garmin "light" = Apple Health "Core"
+                    ("REM",   dto.rem_sleep_seconds),
+                    ("Awake", dto.awake_sleep_seconds),
+                ]
+                for stage, seconds in stages:
+                    if seconds:
+                        duration_min = round(seconds / 60, 4)
+                        conn.execute("""
+                            INSERT OR REPLACE INTO sleep(date, stage, start_ts, end_ts, duration_min, source)
+                            VALUES(?, ?, ?, ?, ?, 'Garmin')
+                        """, (date_str, stage, start_ts, end_ts, duration_min))
+                        counts["sleep_rows"] += 1
+        except Exception:
+            pass
+        current += timedelta(days=1)
+
+    # ── 2. Overnight HRV via DailyHRV.list() ─────────────────────────────────
+    # garth returns up to 28 days per call — chunk accordingly
+    chunk_start = start_date
+    while chunk_start <= end_date:
+        chunk_end = min(chunk_start + timedelta(days=27), end_date)
+        try:
+            hrv_list = garth.DailyHRV.list(end=chunk_end, period=(chunk_end - chunk_start).days + 1)
+            for hrv in hrv_list:
+                if hrv.last_night_avg:
+                    ts = datetime.combine(hrv.calendar_date, datetime.min.time()).timestamp()
+                    conn.execute("""
+                        INSERT OR IGNORE INTO metrics
+                        (metric_name, start_ts, end_ts, value, unit, source, device)
+                        VALUES('HeartRateVariabilitySDNN', ?, ?, ?, 'ms', 'Garmin', NULL)
+                    """, (ts, ts + 86400, hrv.last_night_avg))
+                    counts["hrv_rows"] += 1
+        except Exception:
+            pass
+        chunk_start = chunk_end + timedelta(days=1)
+
+    # ── 3. Stress via DailyStress.list() ─────────────────────────────────────
+    chunk_start = start_date
+    while chunk_start <= end_date:
+        chunk_end = min(chunk_start + timedelta(days=27), end_date)
+        try:
+            stress_list = garth.DailyStress.list(end=chunk_end, period=(chunk_end - chunk_start).days + 1)
+            for s in stress_list:
+                if s.overall_stress_level and s.overall_stress_level > 0:
+                    ts = datetime.combine(s.calendar_date, datetime.min.time()).timestamp()
+                    conn.execute("""
+                        INSERT OR IGNORE INTO metrics
+                        (metric_name, start_ts, end_ts, value, unit, source, device)
+                        VALUES('GarminStress', ?, ?, ?, 'score', 'Garmin', NULL)
+                    """, (ts, ts + 86400, s.overall_stress_level))
+                    counts["stress_rows"] += 1
+        except Exception:
+            pass
+        chunk_start = chunk_end + timedelta(days=1)
+
+    # ── 4. Body Battery via connectapi ────────────────────────────────────────
+    # Returns per-day max/min/end body battery (0-100 readiness score)
+    chunk_start = start_date
+    while chunk_start <= end_date:
+        chunk_end = min(chunk_start + timedelta(days=13), end_date)   # API limit ~2 weeks
+        try:
+            bb_data = garth.connectapi(
+                "/wellness-service/wellness/bodyBattery/reports/daily",
+                params={"startDate": str(chunk_start), "endDate": str(chunk_end)},
+            )
+            for day in (bb_data or []):
+                day_date = day.get("date") or day.get("calendarDate", "")
+                if not day_date:
+                    continue
+                # Use the charged level (highest) as the daily readiness score
+                high = day.get("bodyBatteryValueForDay")
+                if high is None:
+                    # fall back to max in the stat list
+                    stat_list = day.get("bodyBatteryStatList") or []
+                    values = [s.get("bodyBattery") for s in stat_list if s.get("bodyBattery") is not None]
+                    high = max(values) if values else None
+                if high is not None:
+                    try:
+                        ts = datetime.strptime(day_date[:10], "%Y-%m-%d").timestamp()
+                        conn.execute("""
+                            INSERT OR IGNORE INTO metrics
+                            (metric_name, start_ts, end_ts, value, unit, source, device)
+                            VALUES('GarminBodyBattery', ?, ?, ?, 'score', 'Garmin', NULL)
+                        """, (ts, ts + 86400, high))
+                        counts["body_battery_rows"] += 1
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        chunk_start = chunk_end + timedelta(days=1)
+
+    conn.commit()
+    return counts
 
 
 # ─── sync job ─────────────────────────────────────────────────────────────────
@@ -244,20 +366,32 @@ def _run_garmin_sync(force: bool = False) -> None:
             conn = _db()
             conn.execute("DELETE FROM workouts WHERE source='Garmin'")
             conn.execute("DELETE FROM metrics WHERE source='Garmin'")
+            conn.execute("DELETE FROM sleep WHERE source='Garmin'")
             conn.commit()
             after_ts = 0.0
         else:
             after_ts = float(cfg.get("last_sync_timestamp") or 0)
 
+        # Sync activities
         activities = _fetch_activities(after_ts)
         added, skipped = _append_garmin_activities(activities)
+
+        # Sync wellness data (sleep, HRV, stress, body battery)
+        wellness_start = date.fromtimestamp(after_ts) if after_ts else date(2020, 1, 1)
+        wellness_counts = _sync_wellness(wellness_start, date.today())
 
         cfg["last_sync_timestamp"] = int(time.time())
         _save_garmin_config(cfg)
 
         clear_all_caches()
 
-        _garmin_sync_job = {"status": "done", "added": added, "skipped": skipped, "error": None}
+        _garmin_sync_job = {
+            "status": "done",
+            "added": added,
+            "skipped": skipped,
+            "wellness": wellness_counts,
+            "error": None,
+        }
 
     except Exception as e:
         _garmin_sync_job = {"status": "error", "added": 0, "skipped": 0, "error": str(e)}
