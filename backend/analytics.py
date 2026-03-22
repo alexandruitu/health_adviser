@@ -94,6 +94,25 @@ def _daily() -> pd.DataFrame:
         tmp.columns = ["date", metric]
         df = df.merge(tmp, on="date", how="left")
 
+    # Per-source HRV: Garmin (overnight) vs Apple Health / Elite HRV (all non-Garmin)
+    q_garmin = """
+        SELECT date(datetime(start_ts, 'unixepoch')) AS day, AVG(value) AS val
+        FROM metrics
+        WHERE metric_name = 'HeartRateVariabilitySDNN' AND source = 'Garmin'
+        GROUP BY day
+    """
+    q_apple = """
+        SELECT date(datetime(start_ts, 'unixepoch')) AS day, AVG(value) AS val
+        FROM metrics
+        WHERE metric_name = 'HeartRateVariabilitySDNN'
+          AND (source != 'Garmin' OR source IS NULL OR source = '')
+        GROUP BY day
+    """
+    for q, col in [(q_garmin, "HRV_Garmin"), (q_apple, "HRV_Apple")]:
+        tmp = pd.read_sql_query(q, conn)
+        tmp.columns = ["date", col]
+        df = df.merge(tmp, on="date", how="left")
+
     df["date"] = pd.to_datetime(df["date"])
     return df
 
@@ -102,8 +121,12 @@ def _daily() -> pd.DataFrame:
 def _sleep() -> pd.DataFrame:
     """Build nightly sleep summary from SQLite sleep table (stage rows)."""
     conn = _db()
+    # AVG across sources deduplicates nights recorded by both Connect and Garmin
     df = pd.read_sql_query(
-        "SELECT date, stage, duration_min FROM sleep WHERE stage IN ('Core','Deep','REM','Awake','InBed','Unspecified')",
+        """SELECT date, stage, AVG(duration_min) AS duration_min
+           FROM sleep
+           WHERE stage IN ('Core','Deep','REM','Awake','InBed','Unspecified')
+           GROUP BY date, stage""",
         conn
     )
     if df.empty:

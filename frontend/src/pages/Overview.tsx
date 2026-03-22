@@ -39,7 +39,7 @@ export function Overview() {
   const { data: daily, loading: dailyLoading } = useApi(
     () => api.daily({
       start, end,
-      metrics: "StepCount,ActiveEnergyBurned,RestingHeartRate,HeartRateVariabilitySDNN,BodyMass,BodyFatPercentage,VO2Max",
+      metrics: "StepCount,ActiveEnergyBurned,RestingHeartRate,HeartRateVariabilitySDNN,HRV_Apple,HRV_Garmin,BodyMass,BodyFatPercentage,VO2Max",
     }),
     [start, end]
   );
@@ -54,17 +54,27 @@ export function Overview() {
     const steps   = dailyData.map(r => r.StepCount);
     const energy  = dailyData.map(r => r.ActiveEnergyBurned);
     const rhr     = dailyData.map(r => r.RestingHeartRate);
-    const hrv     = dailyData.map(r => r.HeartRateVariabilitySDNN);
+    const hrv        = dailyData.map(r => r.HeartRateVariabilitySDNN);
+    const hrvApple   = dailyData.map(r => (r as Record<string, unknown>).HRV_Apple as number | undefined);
+    const hrvGarmin  = dailyData.map(r => (r as Record<string, unknown>).HRV_Garmin as number | undefined);
     const weight  = dailyData.map(r => r.BodyMass);
     const fat     = dailyData.map(r => r.BodyFatPercentage);
     const vo2     = dailyData.map(r => r.VO2Max);
     const slp     = sleepData.map(r => r.total_sleep_hours);
+    const deep    = sleepData.map(r => (r as Record<string, unknown>).Deep as number | undefined);
+    const rem     = sleepData.map(r => (r as Record<string, unknown>).REM as number | undefined);
+    const core    = sleepData.map(r => (r as Record<string, unknown>).Core as number | undefined);
     return {
       avgSteps:    fmtInt(avg(steps)),
       avgEnergy:   fmt1(avg(energy)),
       avgRHR:      fmt1(avg(rhr)),
       avgHRV:      fmt1(avg(hrv)),
+      avgHRVApple: fmt1(avg(hrvApple)),
+      avgHRVGarmin:fmt1(avg(hrvGarmin)),
       avgSleep:    fmt1(avg(slp)),
+      avgDeep:     fmt1(avg(deep)),
+      avgREM:      fmt1(avg(rem)),
+      avgCore:     fmt1(avg(core)),
       latestWeight:fmt1(latest(weight)),
       avgWeight:   fmt1(avg(weight)),
       latestFat:   fmt1(latest(fat)),
@@ -119,12 +129,20 @@ export function Overview() {
           color="#f43f5e"
         />
         <Card
-          title="HRV (SDNN)"
-          value={stats.avgHRV}
+          title="HRV · Apple Health"
+          value={stats.avgHRVApple}
           unit="ms"
           subtitle={`avg · ${year}`}
           icon={<Activity size={14} />}
           color="#10b981"
+        />
+        <Card
+          title="HRV · Garmin"
+          value={stats.avgHRVGarmin}
+          unit="ms"
+          subtitle={`avg · ${year}`}
+          icon={<Activity size={14} />}
+          color="#06b6d4"
         />
         <Card
           title="Sleep"
@@ -133,6 +151,30 @@ export function Overview() {
           subtitle={`avg · ${year}`}
           icon={<Moon size={14} />}
           color="#8b5cf6"
+        />
+        <Card
+          title="Deep sleep"
+          value={stats.avgDeep}
+          unit="hrs"
+          subtitle={`avg · ${year}`}
+          icon={<Moon size={14} />}
+          color="#4f46e5"
+        />
+        <Card
+          title="REM sleep"
+          value={stats.avgREM}
+          unit="hrs"
+          subtitle={`avg · ${year}`}
+          icon={<Moon size={14} />}
+          color="#7c3aed"
+        />
+        <Card
+          title="Core sleep"
+          value={stats.avgCore}
+          unit="hrs"
+          subtitle={`avg · ${year}`}
+          icon={<Moon size={14} />}
+          color="#a855f7"
         />
         <Card
           title="Weight"
@@ -206,7 +248,10 @@ export function Overview() {
         <ChartPanel
           title={`HRV — SDNN (${year})`}
           data={dailyData}
-          series={[{ key: "HeartRateVariabilitySDNN", color: "#10b981" }]}
+          series={[
+            { key: "HRV_Apple",  color: "#10b981", name: "Apple Watch" },
+            { key: "HRV_Garmin", color: "#06b6d4", name: "Garmin" },
+          ]}
           unit="ms"
           chartType="area"
           loading={dailyLoading}
