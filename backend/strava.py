@@ -154,12 +154,12 @@ def _append_activities(activities: list) -> tuple:
         if cur.rowcount:
             added += 1
             # Mirror distance into metrics table
-            if sport_type == "Run" and distance_km:
+            if workout_type == "Running" and distance_km:
                 conn.execute(
                     "INSERT OR IGNORE INTO metrics(metric_name,start_ts,end_ts,value,unit,source,device) VALUES(?,?,?,?,?,?,?)",
                     ("DistanceWalkingRunning", start_ts, end_ts, distance_km, "km", "Strava", None),
                 )
-            elif sport_type in ("Ride", "VirtualRide") and distance_km:
+            elif workout_type == "Cycling" and distance_km:
                 conn.execute(
                     "INSERT OR IGNORE INTO metrics(metric_name,start_ts,end_ts,value,unit,source,device) VALUES(?,?,?,?,?,?,?)",
                     ("DistanceCycling", start_ts, end_ts, distance_km, "km", "Strava", None),

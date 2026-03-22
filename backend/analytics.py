@@ -206,111 +206,110 @@ def _valid_metrics() -> list:
 @lru_cache(maxsize=1)
 def _running_dist_by_day() -> pd.Series:
     """
-    Daily running distance (km) from DistanceWalkingRunning records within
-    running workout windows, with multi-source deduplication.
+    Daily running distance (km).
+    Primary source: workouts.distance_km (Strava / Garmin — always populated).
+    Supplement: DistanceWalkingRunning metric records for Apple Health workouts
+    that have NULL distance_km in the workouts table.
     """
-    try:
-        dwr = _by_type("DistanceWalkingRunning").copy()
-    except FileNotFoundError:
-        return pd.Series(dtype=float, name="running_km")
-
     wo = _workouts()
     all_runs = wo[wo["workoutType"].str.contains("Running", na=False)].copy()
     all_runs = all_runs[all_runs["duration_min"] <= 600]
-    runs = all_runs[["startDate", "endDate"]].copy()
 
-    if runs.empty or dwr.empty:
-        return pd.Series(dtype=float, name="running_km")
-
-    if "unit" in dwr.columns and (dwr["unit"] == "mi").any():
-        mi_mask = dwr["unit"] == "mi"
-        dwr.loc[mi_mask, "value_num"] = dwr.loc[mi_mask, "value_num"] * 1.60934
-
-    dwr["date"] = dwr["startDate"].dt.normalize()
-    source_col = "sourceName" if "sourceName" in dwr.columns else None
-    keep_cols = ["startDate", "date", "value_num"] + ([source_col] if source_col else [])
-    dwr_sorted = dwr.sort_values("startDate")[keep_cols].reset_index(drop=True)
-
-    runs_sorted = runs.sort_values("startDate").reset_index(drop=True)
-    runs_sorted = runs_sorted.rename(columns={"startDate": "run_start", "endDate": "run_end"})
-
-    merged = pd.merge_asof(
-        dwr_sorted,
-        runs_sorted,
-        left_on="startDate",
-        right_on="run_start",
-        direction="backward",
+    # Part 1 — distance already in workouts table (column aliased as "distance")
+    wo_dist = (
+        all_runs[all_runs["distance"].notna()]
+        .assign(date=lambda d: d["startDate"].dt.normalize())
+        .groupby("date")["distance"]
+        .sum()
+        .rename("running_km")
     )
 
-    in_run = merged[merged["startDate"] < merged["run_end"]].copy()
+    # Part 2 — Apple Health metric records for workouts that lack distance
+    ah_runs = all_runs[all_runs["distance"].isna()]
+    if ah_runs.empty:
+        return wo_dist if not wo_dist.empty else pd.Series(dtype=float, name="running_km")
 
-    if in_run.empty:
-        return pd.Series(dtype=float, name="running_km")
+    try:
+        dwr = _by_type("DistanceWalkingRunning").copy()
+    except FileNotFoundError:
+        return wo_dist if not wo_dist.empty else pd.Series(dtype=float, name="running_km")
 
-    if source_col:
-        in_run["workout_id"] = in_run["run_start"]
-        by_source = (
-            in_run.groupby(["workout_id", "date", source_col])["value_num"]
-            .sum()
-        )
-        best = by_source.groupby(level=["workout_id", "date"]).max()
-        return best.groupby("date").sum().rename("running_km")
-    else:
-        return in_run.groupby("date")["value_num"].sum().rename("running_km")
+    if dwr.empty:
+        return wo_dist if not wo_dist.empty else pd.Series(dtype=float, name="running_km")
+
+    if "unit" in dwr.columns and (dwr["unit"] == "mi").any():
+        dwr.loc[dwr["unit"] == "mi", "value_num"] *= 1.60934
+
+    dwr["date"] = dwr["startDate"].dt.normalize()
+    runs_sorted = ah_runs[["startDate", "endDate"]].rename(
+        columns={"startDate": "run_start", "endDate": "run_end"}
+    ).sort_values("run_start").reset_index(drop=True)
+
+    merged = pd.merge_asof(
+        dwr.sort_values("startDate")[["startDate", "date", "value_num"]].reset_index(drop=True),
+        runs_sorted,
+        left_on="startDate", right_on="run_start", direction="backward",
+    )
+    in_run = merged[merged["startDate"] < merged["run_end"]]
+    ah_dist = in_run.groupby("date")["value_num"].sum().rename("running_km")
+
+    combined = pd.concat([wo_dist, ah_dist]).groupby(level=0).sum()
+    return combined.rename("running_km")
 
 
 @lru_cache(maxsize=1)
 def _cycling_dist_by_day() -> pd.Series:
     """
-    Daily cycling distance (km) from DistanceCycling records within cycling
-    workout windows, with multi-source deduplication.
+    Daily cycling distance (km).
+    Primary source: workouts.distance_km (Strava / Garmin — covers ALL cycling
+    subtypes: Ride, MountainBikeRide, GravelRide, VirtualRide, etc.).
+    Supplement: DistanceCycling metric records for Apple Health workouts that
+    have NULL distance_km in the workouts table.
     """
-    try:
-        dc = _by_type("DistanceCycling").copy()
-    except FileNotFoundError:
-        return pd.Series(dtype=float, name="cycling_km")
-
     wo = _workouts()
     all_rides = wo[wo["workoutType"].str.contains("Cycling", na=False)].copy()
     all_rides = all_rides[all_rides["duration_min"] <= 600]
-    rides = all_rides[["startDate", "endDate"]].copy()
 
-    if rides.empty or dc.empty:
-        return pd.Series(dtype=float, name="cycling_km")
+    # Part 1 — distance already in workouts table (column aliased as "distance")
+    wo_dist = (
+        all_rides[all_rides["distance"].notna()]
+        .assign(date=lambda d: d["startDate"].dt.normalize())
+        .groupby("date")["distance"]
+        .sum()
+        .rename("cycling_km")
+    )
+
+    # Part 2 — Apple Health metric records for workouts that lack distance
+    ah_rides = all_rides[all_rides["distance"].isna()]
+    if ah_rides.empty:
+        return wo_dist if not wo_dist.empty else pd.Series(dtype=float, name="cycling_km")
+
+    try:
+        dc = _by_type("DistanceCycling").copy()
+    except FileNotFoundError:
+        return wo_dist if not wo_dist.empty else pd.Series(dtype=float, name="cycling_km")
+
+    if dc.empty:
+        return wo_dist if not wo_dist.empty else pd.Series(dtype=float, name="cycling_km")
 
     if "unit" in dc.columns and (dc["unit"] == "mi").any():
         dc.loc[dc["unit"] == "mi", "value_num"] *= 1.60934
 
     dc["date"] = dc["startDate"].dt.normalize()
-    source_col = "sourceName" if "sourceName" in dc.columns else None
-    keep_cols = ["startDate", "date", "value_num"] + ([source_col] if source_col else [])
-    dc_sorted = dc.sort_values("startDate")[keep_cols].reset_index(drop=True)
-
-    rides_sorted = rides.sort_values("startDate").reset_index(drop=True)
-    rides_sorted = rides_sorted.rename(columns={"startDate": "ride_start", "endDate": "ride_end"})
+    rides_sorted = ah_rides[["startDate", "endDate"]].rename(
+        columns={"startDate": "ride_start", "endDate": "ride_end"}
+    ).sort_values("ride_start").reset_index(drop=True)
 
     merged = pd.merge_asof(
-        dc_sorted,
+        dc.sort_values("startDate")[["startDate", "date", "value_num"]].reset_index(drop=True),
         rides_sorted,
-        left_on="startDate",
-        right_on="ride_start",
-        direction="backward",
+        left_on="startDate", right_on="ride_start", direction="backward",
     )
-    in_ride = merged[merged["startDate"] < merged["ride_end"]].copy()
+    in_ride = merged[merged["startDate"] < merged["ride_end"]]
+    ah_dist = in_ride.groupby("date")["value_num"].sum().rename("cycling_km")
 
-    if in_ride.empty:
-        return pd.Series(dtype=float, name="cycling_km")
-
-    if source_col:
-        in_ride["workout_id"] = in_ride["ride_start"]
-        by_source = (
-            in_ride.groupby(["workout_id", "date", source_col])["value_num"]
-            .sum()
-        )
-        best = by_source.groupby(level=["workout_id", "date"]).max()
-        return best.groupby("date").sum().rename("cycling_km")
-    else:
-        return in_ride.groupby("date")["value_num"].sum().rename("cycling_km")
+    combined = pd.concat([wo_dist, ah_dist]).groupby(level=0).sum()
+    return combined.rename("cycling_km")
 
 
 @lru_cache(maxsize=1)
