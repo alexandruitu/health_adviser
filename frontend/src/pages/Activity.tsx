@@ -189,8 +189,8 @@ export function Activity() {
   const hasInsights = insData.some(r => r.run_elevation_m > 0 || r.cyc_elevation_m > 0);
 
 
-  const totalRunElev  = insData.reduce((s, r) => s + (r.run_elevation_m ?? 0), 0);
-  const totalCycElev  = insData.reduce((s, r) => s + (r.cyc_elevation_m ?? 0), 0);
+  const insRunElev  = insData.reduce((s, r) => s + (r.run_elevation_m ?? 0), 0);
+  const insCycElev  = insData.reduce((s, r) => s + (r.cyc_elevation_m ?? 0), 0);
   const avgRunHR      = insData.filter(r => r.run_avg_hr > 0).reduce((s, r, _i, a) => s + r.run_avg_hr / a.length, 0);
   const avgRunPace    = insData.filter(r => r.run_avg_pace > 0).reduce((s, r, _i, a) => s + r.run_avg_pace / a.length, 0);
   const totalSuffer   = insData.reduce((s, r) => s + (r.run_suffer ?? 0) + (r.cyc_suffer ?? 0), 0);
@@ -499,8 +499,8 @@ export function Activity() {
 
         {/* Strava summary stats */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.625rem" }}>
-          <StatBadge label="Run elevation" value={totalRunElev > 0 ? Math.round(totalRunElev).toLocaleString() : null} unit="m" color={RUN_COLOR} />
-          <StatBadge label="Cyc elevation" value={totalCycElev > 0 ? Math.round(totalCycElev).toLocaleString() : null} unit="m" color={BIKE_COLOR} />
+          <StatBadge label="Run elevation" value={insRunElev > 0 ? Math.round(insRunElev).toLocaleString() : null} unit="m" color={RUN_COLOR} />
+          <StatBadge label="Cyc elevation" value={insCycElev > 0 ? Math.round(insCycElev).toLocaleString() : null} unit="m" color={BIKE_COLOR} />
           <StatBadge label="Avg run HR" value={avgRunHR > 0 ? Math.round(avgRunHR) : null} unit="bpm" color="#ef4444" />
           <StatBadge label="Avg run pace" value={avgRunPace > 0 ? `${Math.floor(avgRunPace)}:${String(Math.round((avgRunPace % 1) * 60)).padStart(2, "0")}` : null} unit="/km" color={RUN_COLOR} />
           <StatBadge label="Relative effort" value={totalSuffer > 0 ? Math.round(totalSuffer) : null} color="#f97316" />
