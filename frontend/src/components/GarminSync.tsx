@@ -245,7 +245,7 @@ export function GarminSync() {
                   letterSpacing: "0.2em",
                 }}
               />
-            />
+            )}
             <button type="submit" disabled={logging} style={{
               backgroundColor: logging ? "#2a2d3a" : GARMIN_BLUE,
               color: logging ? "#64748b" : "#fff",
