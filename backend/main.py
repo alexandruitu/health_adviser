@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Optional, List
 
 import pandas as pd
-from fastapi import FastAPI, Query, BackgroundTasks, UploadFile, File, HTTPException
+from fastapi import FastAPI, Query, BackgroundTasks, UploadFile, File, HTTPException, Body
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
@@ -819,20 +820,30 @@ def garmin_status():
     }
 
 
+class GarminCredentials(BaseModel):
+    email: str
+    password: str
+    mfa_code: Optional[str] = None
+
 @app.post("/api/garmin/connect")
-def garmin_connect(body: dict):
-    email    = body.get("email", "").strip()
-    password = body.get("password", "").strip()
+def garmin_connect(creds: GarminCredentials):
+    email    = creds.email.strip()
+    password = creds.password.strip()
     if not email or not password:
         raise HTTPException(status_code=400, detail="Email and password are required")
     try:
-        _garmin_login(email, password)
+        _garmin_login(email, password, creds.mfa_code)
         cfg = _load_garmin_config()
         cfg["email"] = email
         _save_garmin_config(cfg)
         return {"connected": True, "email": email}
+    except ValueError as e:
+        if "MFA_REQUIRED" in str(e):
+            raise HTTPException(status_code=428, detail="MFA_REQUIRED")
+        raise HTTPException(status_code=401, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Garmin login failed: {e}")
+        msg = str(e) or type(e).__name__
+        raise HTTPException(status_code=401, detail=f"Garmin login failed: {msg}")
 
 
 @app.post("/api/garmin/disconnect")

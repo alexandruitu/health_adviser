@@ -19,6 +19,8 @@ export function GarminSync() {
   const [showForm, setShowForm]   = useState(false);
   const [email, setEmail]         = useState("");
   const [password, setPassword]   = useState("");
+  const [mfaCode, setMfaCode]     = useState("");
+  const [needsMfa, setNeedsMfa]   = useState(false);
   const [logging, setLogging]     = useState(false);
   const pollRef                   = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -59,13 +61,18 @@ export function GarminSync() {
     setLogging(true);
     setError(null);
     try {
-      await api.garminConnect(email, password);
+      await api.garminConnect(email, password, needsMfa ? mfaCode : undefined);
       setShowForm(false);
-      setEmail("");
-      setPassword("");
+      setEmail(""); setPassword(""); setMfaCode(""); setNeedsMfa(false);
       refreshStatus();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      const msg = err instanceof Error ? err.message : "Login failed";
+      if (msg.includes("MFA_REQUIRED")) {
+        setNeedsMfa(true);
+        setError("Enter the 6-digit code from your Garmin authenticator app.");
+      } else {
+        setError(msg);
+      }
     } finally {
       setLogging(false);
     }
@@ -201,25 +208,43 @@ export function GarminSync() {
             <span style={{ fontSize: "0.75rem", color: "#ef4444" }}>{error}</span>
           )}
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            <input
-              type="email" placeholder="Email" value={email}
-              onChange={e => setEmail(e.target.value)} required
-              style={{
-                flex: 1, minWidth: "160px",
-                backgroundColor: "#0f1117", border: "1px solid #2a2d3a",
-                borderRadius: "0.375rem", padding: "0.4rem 0.75rem",
-                color: "#e2e8f0", fontSize: "0.8rem", outline: "none",
-              }}
-            />
-            <input
-              type="password" placeholder="Password" value={password}
-              onChange={e => setPassword(e.target.value)} required
-              style={{
-                flex: 1, minWidth: "160px",
-                backgroundColor: "#0f1117", border: "1px solid #2a2d3a",
-                borderRadius: "0.375rem", padding: "0.4rem 0.75rem",
-                color: "#e2e8f0", fontSize: "0.8rem", outline: "none",
-              }}
+            {!needsMfa && (
+              <>
+                <input
+                  type="email" placeholder="Email" value={email}
+                  onChange={e => setEmail(e.target.value)} required
+                  style={{
+                    flex: 1, minWidth: "160px",
+                    backgroundColor: "#0f1117", border: "1px solid #2a2d3a",
+                    borderRadius: "0.375rem", padding: "0.4rem 0.75rem",
+                    color: "#e2e8f0", fontSize: "0.8rem", outline: "none",
+                  }}
+                />
+                <input
+                  type="password" placeholder="Password" value={password}
+                  onChange={e => setPassword(e.target.value)} required
+                  style={{
+                    flex: 1, minWidth: "160px",
+                    backgroundColor: "#0f1117", border: "1px solid #2a2d3a",
+                    borderRadius: "0.375rem", padding: "0.4rem 0.75rem",
+                    color: "#e2e8f0", fontSize: "0.8rem", outline: "none",
+                  }}
+                />
+              </>
+            )}
+            {needsMfa && (
+              <input
+                type="text" placeholder="6-digit MFA code" value={mfaCode}
+                onChange={e => setMfaCode(e.target.value)} required autoFocus
+                maxLength={6}
+                style={{
+                  flex: 1, minWidth: "160px",
+                  backgroundColor: "#0f1117", border: "1px solid #f59e0b",
+                  borderRadius: "0.375rem", padding: "0.4rem 0.75rem",
+                  color: "#e2e8f0", fontSize: "0.8rem", outline: "none",
+                  letterSpacing: "0.2em",
+                }}
+              />
             />
             <button type="submit" disabled={logging} style={{
               backgroundColor: logging ? "#2a2d3a" : GARMIN_BLUE,

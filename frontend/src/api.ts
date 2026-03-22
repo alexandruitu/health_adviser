@@ -239,11 +239,11 @@ export const api = {
   },
   // Garmin Connect integration
   garminStatus: () => get<GarminStatus>("/garmin/status"),
-  garminConnect: (email: string, password: string): Promise<{ connected: boolean; email: string }> =>
+  garminConnect: (email: string, password: string, mfa_code?: string): Promise<{ connected: boolean; email: string }> =>
     fetch("/api/garmin/connect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, mfa_code }),
     }).then(async r => {
       if (!r.ok) { const e = await r.json(); throw new Error(e.detail || "Login failed"); }
       return r.json();

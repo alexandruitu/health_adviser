@@ -70,20 +70,24 @@ def _save_garmin_config(cfg: dict) -> None:
 
 def _resume_session() -> bool:
     """Try to resume a saved garth session. Returns True if successful."""
-    if GARMIN_TOKEN_DIR.exists():
-        try:
-            garth.resume(str(GARMIN_TOKEN_DIR))
-            # Quick test to verify token is still valid
-            garth.connectapi("/userprofile-service/userprofile/user-settings")
-            return True
-        except Exception:
-            pass
-    return False
+    if not GARMIN_TOKEN_DIR.exists():
+        return False
+    try:
+        garth.resume(str(GARMIN_TOKEN_DIR))
+        # Light check: confirm we have an oauth2 token
+        return garth.client.oauth2_token is not None
+    except Exception:
+        return False
 
 
-def _login(email: str, password: str) -> None:
+def _login(email: str, password: str, mfa_code: Optional[str] = None) -> None:
     """Authenticate with Garmin Connect and save tokens to disk."""
-    garth.login(email, password)
+    def _prompt_mfa() -> str:
+        if mfa_code:
+            return mfa_code.strip()
+        raise ValueError("MFA_REQUIRED")
+
+    garth.login(email, password, prompt_mfa=_prompt_mfa)
     GARMIN_TOKEN_DIR.mkdir(parents=True, exist_ok=True)
     garth.save(str(GARMIN_TOKEN_DIR))
 
