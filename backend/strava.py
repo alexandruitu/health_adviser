@@ -65,28 +65,19 @@ def _ensure_valid_token(cfg: dict) -> dict:
 
 
 def _append_activities(activities: list) -> tuple:
-    """Append new Strava activities into SQLite (workouts + metrics tables)."""
+    """Append new Strava activities into SQLite (workouts + metrics tables).
+
+    Deduplication is handled entirely by the DB UNIQUE(start_ts, workout_type)
+    constraint via INSERT OR IGNORE — no time-window heuristic that would
+    incorrectly skip back-to-back activities (warm-up → race → cool-down).
+    """
     conn = _db()
-    _90min_s = 90 * 60  # seconds
-
-    # Load existing workout start_ts for dedup
-    existing_ts = [r[0] for r in conn.execute("SELECT start_ts FROM workouts WHERE source='Strava'").fetchall()]
-
-    def _near_existing(ts: float) -> bool:
-        return any(abs(e - ts) < _90min_s for e in existing_ts)
-
-    wo_rows  = []
-    met_rows = []
     added = skipped = 0
 
     for act in activities:
         local_str = act.get("start_date_local", act["start_date"])
         dt_local  = datetime.fromisoformat(local_str.replace("Z", "+00:00")).replace(tzinfo=None)
         start_ts  = dt_local.timestamp()
-
-        if _near_existing(start_ts):
-            skipped += 1
-            continue
 
         elapsed_sec  = act.get("elapsed_time", 0)
         end_ts       = start_ts + elapsed_sec
@@ -98,7 +89,13 @@ def _append_activities(activities: list) -> tuple:
         moving_sec   = act.get("moving_time", elapsed_sec)
         avg_speed_ms = act.get("average_speed")
 
-        wo_rows.append((
+        cur = conn.execute("""
+            INSERT OR IGNORE INTO workouts
+            (workout_type,start_ts,end_ts,duration_min,distance_km,active_energy_kcal,
+             source,device,moving_time_min,elevation_m,avg_hr,max_hr,suffer_score,
+             avg_cadence,avg_watts,avg_speed_kmh,activity_name,workout_subtype,trainer)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
             workout_type, start_ts, end_ts, duration_min, distance_km, None,
             "Strava", None,
             round(moving_sec / 60, 4),
@@ -113,30 +110,24 @@ def _append_activities(activities: list) -> tuple:
             act.get("workout_type", 0),
             int(bool(act.get("trainer", False))),
         ))
-        existing_ts.append(start_ts)
-        added += 1
 
-        # Distance record into metrics table
-        if sport_type == "Run" and distance_km:
-            met_rows.append(("DistanceWalkingRunning", start_ts, end_ts, distance_km, "km", "Strava", None))
-        elif sport_type in ("Ride", "VirtualRide") and distance_km:
-            met_rows.append(("DistanceCycling", start_ts, end_ts, distance_km, "km", "Strava", None))
+        if cur.rowcount:
+            added += 1
+            # Mirror distance into metrics table
+            if sport_type == "Run" and distance_km:
+                conn.execute(
+                    "INSERT OR IGNORE INTO metrics(metric_name,start_ts,end_ts,value,unit,source,device) VALUES(?,?,?,?,?,?,?)",
+                    ("DistanceWalkingRunning", start_ts, end_ts, distance_km, "km", "Strava", None),
+                )
+            elif sport_type in ("Ride", "VirtualRide") and distance_km:
+                conn.execute(
+                    "INSERT OR IGNORE INTO metrics(metric_name,start_ts,end_ts,value,unit,source,device) VALUES(?,?,?,?,?,?,?)",
+                    ("DistanceCycling", start_ts, end_ts, distance_km, "km", "Strava", None),
+                )
+        else:
+            skipped += 1
 
-    if wo_rows:
-        conn.executemany("""
-            INSERT OR IGNORE INTO workouts
-            (workout_type,start_ts,end_ts,duration_min,distance_km,active_energy_kcal,
-             source,device,moving_time_min,elevation_m,avg_hr,max_hr,suffer_score,
-             avg_cadence,avg_watts,avg_speed_kmh,activity_name,workout_subtype,trainer)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        """, wo_rows)
-    if met_rows:
-        conn.executemany(
-            "INSERT OR IGNORE INTO metrics(metric_name,start_ts,end_ts,value,unit,source,device) VALUES(?,?,?,?,?,?,?)",
-            met_rows,
-        )
     conn.commit()
-
     return added, skipped
 
 
