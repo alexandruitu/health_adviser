@@ -17,14 +17,46 @@ STRAVA_TOKEN_URL    = "https://www.strava.com/oauth/token"
 STRAVA_REDIRECT_URI = "http://localhost:8000/api/strava/callback"
 
 WORKOUT_TYPE_MAP = {
-    "Run":              "Running",
-    "Ride":             "Cycling",
-    "VirtualRide":      "Cycling",
-    "Walk":             "Walking",
-    "Hike":             "Hiking",
-    "Swim":             "Swimming",
-    "WeightTraining":   "TraditionalStrengthTraining",
-    "Workout":          "FunctionalStrengthTraining",
+    # Running
+    "Run":                          "Running",
+    "TrailRun":                     "Running",
+    "VirtualRun":                   "Running",
+    "Treadmill":                    "Running",
+    # Cycling
+    "Ride":                         "Cycling",
+    "VirtualRide":                  "Cycling",
+    "MountainBikeRide":             "Cycling",
+    "GravelRide":                   "Cycling",
+    "EBikeRide":                    "Cycling",
+    "EMountainBikeRide":            "Cycling",
+    "Velomobile":                   "Cycling",
+    # Walking / hiking
+    "Walk":                         "Walking",
+    "Hike":                         "Hiking",
+    # Water
+    "Swim":                         "Swimming",
+    "Kayaking":                     "Paddling",
+    "Canoeing":                     "Paddling",
+    "Rowing":                       "Rowing",
+    "StandUpPaddling":              "Paddling",
+    # Snow
+    "AlpineSki":                    "DownhillSkiing",
+    "BackcountrySki":               "CrossCountrySkiing",
+    "NordicSki":                    "CrossCountrySkiing",
+    "Snowboard":                    "Snowboarding",
+    "Snowshoe":                     "Snowshoeing",
+    # Gym / strength
+    "WeightTraining":               "TraditionalStrengthTraining",
+    "Workout":                      "FunctionalStrengthTraining",
+    "Crossfit":                     "FunctionalStrengthTraining",
+    "Yoga":                         "Yoga",
+    "Pilates":                      "Pilates",
+    "Elliptical":                   "Elliptical",
+    "StairStepper":                 "StairClimbing",
+    # Other
+    "RockClimbing":                 "Climbing",
+    "Soccer":                       "Soccer",
+    "Tennis":                       "Tennis",
 }
 
 # In-memory sync job state
