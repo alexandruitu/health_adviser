@@ -204,6 +204,8 @@ export function Activity() {
   const cycSessions  = volData.reduce((s, r) => s + (r.cycling_sessions ?? 0), 0);
   const longestRun   = Math.max(0, ...volData.map(r => r.longest_run_min ?? 0));
   const longestRide  = Math.max(0, ...volData.map(r => r.longest_ride_min ?? 0));
+  const totalRunElev = volData.reduce((s, r) => s + (r.running_elev_m ?? 0), 0);
+  const totalCycElev = volData.reduce((s, r) => s + (r.cycling_elev_m ?? 0), 0);
   const latestCTL    = pmcData.length ? pmcData[pmcData.length - 1].ctl : null;
   const latestTSB    = pmcData.length ? pmcData[pmcData.length - 1].tsb : null;
   const latestDate   = pmcData.length ? pmcData[pmcData.length - 1].date : null;
@@ -241,14 +243,16 @@ export function Activity() {
       </div>
 
       {/* ── Summary cards ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.625rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.625rem" }}>
         <StatBadge label="Running sessions" value={runSessions} color={RUN_COLOR} />
         <StatBadge label="Running time" value={`${(totalRunMin / 60).toFixed(1)}`} unit="h" color={RUN_COLOR} />
         <StatBadge label="Running distance" value={totalRunKm.toFixed(0)} unit="km" color={RUN_COLOR} />
+        <StatBadge label="Run elevation" value={totalRunElev > 0 ? Math.round(totalRunElev).toLocaleString() : null} unit="m" color={RUN_COLOR} />
         <StatBadge label="Longest run" value={longestRun > 0 ? `${(longestRun / 60).toFixed(1)}` : null} unit="h" color={RUN_COLOR} />
         <StatBadge label="Cycling sessions" value={cycSessions} color={BIKE_COLOR} />
         <StatBadge label="Cycling time" value={`${(totalCycMin / 60).toFixed(1)}`} unit="h" color={BIKE_COLOR} />
         <StatBadge label="Cycling distance" value={totalCycKm.toFixed(0)} unit="km" color={BIKE_COLOR} />
+        <StatBadge label="Cyc elevation" value={totalCycElev > 0 ? Math.round(totalCycElev).toLocaleString() : null} unit="m" color={BIKE_COLOR} />
         <StatBadge label="Longest ride" value={longestRide > 0 ? `${(longestRide / 60).toFixed(1)}` : null} unit="h" color={BIKE_COLOR} />
       </div>
 

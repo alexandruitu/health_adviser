@@ -291,7 +291,9 @@ def training_volume(
         wo = wo[wo["startDate"] >= start]
         ds = ds[ds["date"] >= start]
     if end:
-        wo = wo[wo["startDate"] <= end]
+        # Include the full end day (activities at any time on that date)
+        end_excl = (pd.Timestamp(end) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+        wo = wo[wo["startDate"] < end_excl]
         ds = ds[ds["date"] <= end]
 
     wo["period"] = _period_col(wo["startDate"], resolution)
@@ -311,11 +313,13 @@ def training_volume(
         running_min=("active_min", "sum"),
         running_sessions=("active_min", "count"),
         longest_run_min=("active_min", "max"),
+        running_elev_m=("elevation_m", "sum"),
     )
     cyc = wo_valid[wo_valid["sport"] == "cycling"].groupby("period").agg(
         cycling_min=("active_min", "sum"),
         cycling_sessions=("active_min", "count"),
         longest_ride_min=("active_min", "max"),
+        cycling_elev_m=("elevation_m", "sum"),
     )
     cyc_dist_day = _cycling_dist_by_day()
     if len(cyc_dist_day) > 0:
@@ -353,9 +357,10 @@ def training_volume(
     result = result.fillna(0)
 
     for col in ["running_min", "cycling_min", "running_km", "cycling_km",
-                "longest_run_min", "longest_ride_min"]:
+                "longest_run_min", "longest_ride_min",
+                "running_elev_m", "cycling_elev_m"]:
         if col in result.columns:
-            result[col] = result[col].round(1)
+            result[col] = result[col].round(0)
     for col in ["running_sessions", "cycling_sessions"]:
         if col in result.columns:
             result[col] = result[col].astype(int)

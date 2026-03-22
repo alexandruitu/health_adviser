@@ -92,6 +92,8 @@ export interface TrainingVolume {
   longest_ride_min: number;
   running_km: number;
   cycling_km: number;
+  running_elev_m?: number;
+  cycling_elev_m?: number;
 }
 
 export interface PMCPoint {
