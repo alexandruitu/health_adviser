@@ -1,0 +1,11 @@
+{
+  "client_id": "",
+  "client_secret": "",
+  "access_token": null,
+  "refresh_token": null,
+  "token_expires_at": 0,
+  "folder_path": "Health Auto Export/AutoExport/HealthMetrics",
+  "last_sync_timestamp": 0,
+  "processed_file_ids": [],
+  "folder_id": ""
+}
