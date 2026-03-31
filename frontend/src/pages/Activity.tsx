@@ -6,6 +6,7 @@ import {
 import { useApi } from "../hooks/useApi";
 import { api } from "../api";
 import { AdviserPanel } from "../components/AdviserPanel";
+import { GoalTracker } from "../components/GoalTracker";
 import type { Resolution } from "../api";
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -126,8 +127,11 @@ export function Activity() {
   const { start, end } = range;
 
   // ── data fetching ──
+  const [goalsKey, setGoalsKey] = useState(0);
   const { data: volRaw,  loading: volLoading  } = useApi(() => api.trainingVolume(res, start, end), [res, start, end]);
   const { data: pmcRaw,  loading: pmcLoading  } = useApi(() => api.trainingPMC(start, end), [start, end]);
+  const { data: projRaw } = useApi(() => api.trainingPMCProjection(12), []);
+  const { data: goalsRaw } = useApi(() => api.goalsList(), [goalsKey]);
   const { data: yoyRunRaw } = useApi(() => api.trainingYoY("running"), []);
   const { data: yoyCycRaw } = useApi(() => api.trainingYoY("cycling"), []);
   const { data: hrvRaw,  loading: hrvLoading  } = useApi(() => api.trainingHRV(start, end), [start, end]);
@@ -153,6 +157,33 @@ export function Activity() {
     }
     return sampled.map(r => ({ ...r, label: r.date.slice(5) }));
   }, [pmcRaw, res]);
+
+  // ── Merge historical PMC with projection (every 3rd day for readability) ──
+  const pmcWithProjection = useMemo(() => {
+    const hist = (pmcRaw ?? []).map(r => ({
+      ...r, label: r.date.slice(5),
+      proj_maintain_ctl: null as number | null,
+      proj_decay_ctl: null as number | null,
+    }));
+
+    const projPoints = (projRaw?.projection ?? [])
+      .filter((_, i) => i % 3 === 0)
+      .map(p => ({
+        date: p.date, label: p.date.slice(5),
+        load: null, run_min: null, cyc_min: null,
+        ctl: null as number | null, atl: null as number | null, tsb: null as number | null,
+        proj_maintain_ctl: p.maintain_ctl,
+        proj_decay_ctl: p.decay_ctl,
+      }));
+
+    // Anchor: last historical point also gets projection values so lines connect
+    if (hist.length && projRaw) {
+      hist[hist.length - 1].proj_maintain_ctl = projRaw.current_ctl;
+      hist[hist.length - 1].proj_decay_ctl = projRaw.current_ctl;
+    }
+
+    return [...hist, ...projPoints];
+  }, [pmcRaw, projRaw]);
 
   // ── YoY: merge run + cycling into one dataset with prefixed keys ──
   const yoyYears = useMemo(() => {
@@ -307,7 +338,7 @@ export function Activity() {
         )}
       </div>
 
-      {/* ── B: PMC ── */}
+      {/* ── B: PMC + Projections ── */}
 
       <div style={{ ...SURFACE, padding: "1.25rem" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
@@ -317,34 +348,48 @@ export function Activity() {
               <span style={{ fontSize: "0.65rem", color: "#475569" }}>{latestDate.slice(5)}</span>
             )}
             <span style={{ fontSize: "0.7rem", color: "#64748b" }}>
-              CTL (fitness) <span style={{ color: latestCTL != null ? CTL_COLOR : "#64748b" }}>{latestCTL ?? "—"}</span>
+              CTL <span style={{ color: latestCTL != null ? CTL_COLOR : "#64748b" }}>{latestCTL ?? "—"}</span>
             </span>
             <span style={{ fontSize: "0.7rem", color: "#64748b" }}>
-              TSB (form) <span style={{ color: latestTSB != null ? (latestTSB >= 0 ? TSB_COLOR : "#f97316") : "#64748b" }}>{latestTSB ?? "—"}</span>
+              TSB <span style={{ color: latestTSB != null ? (latestTSB >= 0 ? TSB_COLOR : "#f97316") : "#64748b" }}>{latestTSB ?? "—"}</span>
             </span>
+            {projRaw && (
+              <span style={{ fontSize: "0.7rem", color: "#64748b" }}>
+                28d load <span style={{ color: "#a78bfa" }}>{projRaw.avg_load_28d.toFixed(0)}</span>
+              </span>
+            )}
           </div>
         </div>
         <div style={{ fontSize: "0.65rem", color: "#64748b", marginBottom: "0.5rem" }}>
-          Banister TRIMP model · HR-weighted load · ATL τ=7d · CTL τ=42d · rest HR 50 bpm · max HR 185 bpm
+          Banister TRIMP model · ATL τ=7d · CTL τ=42d · dashed = projection (maintain / decay)
         </div>
-        {/* TSB zone legend */}
-        <div style={{ display: "flex", gap: "1rem", fontSize: "0.6rem", color: "#64748b", marginBottom: "0.75rem" }}>
+        {/* Legend */}
+        <div style={{ display: "flex", gap: "1rem", fontSize: "0.6rem", color: "#64748b", marginBottom: "0.75rem", flexWrap: "wrap" }}>
           <span><span style={{ display: "inline-block", width: 10, height: 10, background: "rgba(239,68,68,0.15)", borderRadius: 2, marginRight: 4 }} />Danger &lt; −30</span>
           <span><span style={{ display: "inline-block", width: 10, height: 10, background: "rgba(251,146,60,0.12)", borderRadius: 2, marginRight: 4 }} />Build −10 to −30</span>
           <span><span style={{ display: "inline-block", width: 10, height: 10, background: "rgba(16,185,129,0.15)", borderRadius: 2, marginRight: 4 }} />Race-ready +5 to +25</span>
+          <span><span style={{ display: "inline-block", width: 20, height: 2, background: "#3b82f6", opacity: 0.5, borderRadius: 1, marginRight: 4, verticalAlign: "middle" }} />Maintain load</span>
+          <span><span style={{ display: "inline-block", width: 20, height: 2, background: "#94a3b8", opacity: 0.4, borderRadius: 1, marginRight: 4, verticalAlign: "middle" }} />Decay (no training)</span>
         </div>
         {pmcLoading ? <Spinner /> : (
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={pmcData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={pmcWithProjection} margin={{ top: 4, right: 40, left: -16, bottom: 0 }}>
               {grid}
               <XAxis dataKey="label" {...axisProps} interval="preserveStartEnd" />
               <YAxis {...axisProps} />
               <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, n) => [
-                typeof v === "number" ? v.toFixed(1) : v,
-                ({ ctl: "Fitness (CTL)", atl: "Fatigue (ATL)", tsb: "Form (TSB)" } as Record<string, string>)[String(n)] ?? String(n)
+                typeof v === "number" ? v.toFixed(1) : "—",
+                ({
+                  ctl: "Fitness (CTL)", atl: "Fatigue (ATL)", tsb: "Form (TSB)",
+                  proj_maintain_ctl: "CTL — maintain load",
+                  proj_decay_ctl: "CTL — no training",
+                } as Record<string, string>)[String(n)] ?? String(n)
               ]} />
               <Legend wrapperStyle={{ fontSize: 11, color: "#64748b" }}
-                formatter={(n: string) => ({ ctl: "Fitness (CTL)", atl: "Fatigue (ATL)", tsb: "Form (TSB)" } as Record<string, string>)[n] ?? n} />
+                formatter={(n: string) => ({
+                  ctl: "Fitness (CTL)", atl: "Fatigue (ATL)", tsb: "Form (TSB)",
+                  proj_maintain_ctl: "Maintain →", proj_decay_ctl: "Decay →",
+                } as Record<string, string>)[n] ?? n} />
               {/* TSB zone bands */}
               <ReferenceArea y1={-30} y2={-200} fill="rgba(239,68,68,0.08)" ifOverflow="hidden" />
               <ReferenceArea y1={-10} y2={-30}  fill="rgba(251,146,60,0.07)" ifOverflow="hidden" />
@@ -359,12 +404,34 @@ export function Activity() {
                 label={{ value: "+5", position: "right", fill: "#10b981", fontSize: 9, opacity: 0.7 }} />
               <ReferenceLine y={25}  stroke="#10b981" strokeDasharray="3 3" strokeOpacity={0.4}
                 label={{ value: "+25", position: "right", fill: "#10b981", fontSize: 9, opacity: 0.7 }} />
-              <Line type="monotone" dataKey="ctl" name="ctl" stroke={CTL_COLOR} dot={false} strokeWidth={2} />
-              <Line type="monotone" dataKey="atl" name="atl" stroke={ATL_COLOR} dot={false} strokeWidth={2} />
-              <Line type="monotone" dataKey="tsb" name="tsb" stroke={TSB_COLOR} dot={false} strokeWidth={1.5} strokeDasharray="4 2" />
+              {/* Today marker */}
+              <ReferenceLine x={today.slice(5)} stroke="#6366f1" strokeOpacity={0.4} strokeDasharray="2 3"
+                label={{ value: "today", position: "top", fill: "#6366f1", fontSize: 9, opacity: 0.7 }} />
+              {/* Goal event markers */}
+              {(goalsRaw ?? []).map(g => (
+                <ReferenceLine key={g.id} x={g.event_date.slice(5)}
+                  stroke="#f59e0b" strokeOpacity={0.7} strokeDasharray="4 2"
+                  label={{ value: g.name, position: "top", fill: "#f59e0b", fontSize: 9 }} />
+              ))}
+              {/* Historical lines */}
+              <Line type="monotone" dataKey="ctl" name="ctl" stroke={CTL_COLOR} dot={false} strokeWidth={2} connectNulls={false} />
+              <Line type="monotone" dataKey="atl" name="atl" stroke={ATL_COLOR} dot={false} strokeWidth={2} connectNulls={false} />
+              <Line type="monotone" dataKey="tsb" name="tsb" stroke={TSB_COLOR} dot={false} strokeWidth={1.5} strokeDasharray="4 2" connectNulls={false} />
+              {/* Projection lines */}
+              <Line type="monotone" dataKey="proj_maintain_ctl" name="proj_maintain_ctl" stroke={CTL_COLOR} dot={false} strokeWidth={1.5} strokeDasharray="6 3" strokeOpacity={0.6} connectNulls={false} />
+              <Line type="monotone" dataKey="proj_decay_ctl" name="proj_decay_ctl" stroke="#94a3b8" dot={false} strokeWidth={1} strokeDasharray="3 4" strokeOpacity={0.45} connectNulls={false} />
             </LineChart>
           </ResponsiveContainer>
         )}
+      </div>
+
+      {/* ── Goals & Events ── */}
+      <div style={{ ...SURFACE, padding: "1.25rem" }}>
+        <GoalTracker
+          goals={goalsRaw ?? []}
+          projection={projRaw ?? null}
+          onGoalsChange={() => setGoalsKey(k => k + 1)}
+        />
       </div>
 
       {/* ── D+E: Running & Cycling side-by-side ── */}

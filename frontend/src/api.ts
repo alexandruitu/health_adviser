@@ -139,6 +139,32 @@ export interface PMCPoint {
   tsb: number;
 }
 
+export interface PMCProjectionPoint {
+  date: string;
+  maintain_ctl: number;
+  maintain_atl: number;
+  maintain_tsb: number;
+  decay_ctl: number;
+  decay_atl: number;
+  decay_tsb: number;
+}
+
+export interface PMCProjection {
+  current_ctl: number | null;
+  current_atl: number | null;
+  current_tsb: number | null;
+  avg_load_28d: number;
+  projection: PMCProjectionPoint[];
+}
+
+export interface Goal {
+  id: number;
+  name: string;
+  event_date: string;
+  target_ctl: number | null;
+  created_at: number;
+}
+
 export interface HRVPoint {
   date: string;
   hrv: number | null;
@@ -218,6 +244,18 @@ export const api = {
     get<TrainingVolume[]>("/training/volume", { resolution, start, end }),
   trainingPMC: (start?: string, end?: string) =>
     get<PMCPoint[]>("/training/pmc", { start, end }),
+  trainingPMCProjection: (weeks = 10) =>
+    get<PMCProjection>("/training/pmc/projection", { weeks }),
+  // Goals
+  goalsList: () => get<Goal[]>("/goals"),
+  goalsCreate: (name: string, event_date: string, target_ctl?: number) =>
+    fetch("/api/goals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, event_date, target_ctl }),
+    }).then(r => r.json()) as Promise<Goal>,
+  goalsDelete: (id: number) =>
+    fetch(`/api/goals/${id}`, { method: "DELETE" }).then(r => r.json()),
   trainingYoY: (sport: "running" | "cycling") =>
     get<YoYResponse>("/training/yoy", { sport }),
   trainingHRV: (start?: string, end?: string) =>

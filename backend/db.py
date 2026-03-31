@@ -119,5 +119,13 @@ def _ensure_biomarker_tables():
         );
         CREATE INDEX IF NOT EXISTS idx_bio_marker ON biomarkers(marker_canonical);
         CREATE INDEX IF NOT EXISTS idx_bio_date ON biomarkers(test_date);
+
+        CREATE TABLE IF NOT EXISTS goals (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT    NOT NULL,
+            event_date  TEXT    NOT NULL,
+            target_ctl  REAL,
+            created_at  INTEGER DEFAULT (unixepoch())
+        );
     """)
     conn.commit()

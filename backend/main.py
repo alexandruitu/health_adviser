@@ -444,6 +444,88 @@ def training_pmc(
     return to_records(df)
 
 
+@app.get("/api/training/pmc/projection")
+def training_pmc_projection(weeks: int = 10):
+    """Forward-looking CTL/ATL/TSB projection under 'maintain' and 'decay' scenarios."""
+    import numpy as np
+    from datetime import date, timedelta
+
+    pmc = _pmc_df()
+    if pmc.empty:
+        return {"current_ctl": None, "current_atl": None, "avg_load_28d": 0, "projection": []}
+
+    last = pmc.iloc[-1]
+    current_ctl = float(last["ctl"])
+    current_atl = float(last["atl"])
+    avg_load    = float(pmc.tail(28)["load"].mean())
+
+    alpha_ctl = 1 - np.exp(-1 / 42)
+    alpha_atl = 1 - np.exp(-1 / 7)
+
+    projection = []
+    ctl_m, atl_m = current_ctl, current_atl
+    ctl_d, atl_d = current_ctl, current_atl
+    today = date.today()
+
+    for i in range(1, weeks * 7 + 1):
+        d = today + timedelta(days=i)
+        ctl_m = ctl_m + alpha_ctl * (avg_load - ctl_m)
+        atl_m = atl_m + alpha_atl * (avg_load - atl_m)
+        ctl_d = ctl_d + alpha_ctl * (0 - ctl_d)
+        atl_d = atl_d + alpha_atl * (0 - atl_d)
+        projection.append({
+            "date":         d.isoformat(),
+            "maintain_ctl": round(ctl_m, 1),
+            "maintain_atl": round(atl_m, 1),
+            "maintain_tsb": round(ctl_m - atl_m, 1),
+            "decay_ctl":    round(ctl_d, 1),
+            "decay_atl":    round(atl_d, 1),
+            "decay_tsb":    round(ctl_d - atl_d, 1),
+        })
+
+    return {
+        "current_ctl": round(current_ctl, 1),
+        "current_atl": round(current_atl, 1),
+        "current_tsb": round(current_ctl - current_atl, 1),
+        "avg_load_28d": round(avg_load, 1),
+        "projection": projection,
+    }
+
+
+# ─── Goals CRUD ──────────────────────────────────────────────────────────────
+
+@app.get("/api/goals")
+def goals_list():
+    conn = _db()
+    rows = conn.execute("SELECT id, name, event_date, target_ctl, created_at FROM goals ORDER BY event_date").fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/goals")
+def goals_create(body: dict):
+    name       = str(body.get("name", "")).strip()
+    event_date = str(body.get("event_date", "")).strip()
+    target_ctl = body.get("target_ctl")
+    if not name or not event_date:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=422, detail="name and event_date are required")
+    conn = _db()
+    cur = conn.execute(
+        "INSERT INTO goals (name, event_date, target_ctl) VALUES (?, ?, ?)",
+        (name, event_date, float(target_ctl) if target_ctl is not None else None)
+    )
+    conn.commit()
+    return {"id": cur.lastrowid, "name": name, "event_date": event_date, "target_ctl": target_ctl}
+
+
+@app.delete("/api/goals/{goal_id}")
+def goals_delete(goal_id: int):
+    conn = _db()
+    conn.execute("DELETE FROM goals WHERE id = ?", (goal_id,))
+    conn.commit()
+    return {"deleted": goal_id}
+
+
 @app.get("/api/training/yoy")
 def training_yoy(sport: str = "running"):
     """Year-over-year monthly volumes (minutes + km) for running or cycling."""
