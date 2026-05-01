@@ -105,9 +105,14 @@ GDRIVE_SCOPES       = "https://www.googleapis.com/auth/drive.readonly"
 # ─── app setup ────────────────────────────────────────────────────────────────
 
 app = FastAPI(title="Apple Health API")
+
+_cors_origins = ["http://localhost:5173", "http://localhost:4173", "http://localhost:5174"]
+if _frontend_url := os.environ.get("FRONTEND_URL"):
+    _cors_origins.append(_frontend_url.rstrip("/"))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:4173", "http://localhost:5174"],
+    allow_origins=_cors_origins,
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
     allow_credentials=True,

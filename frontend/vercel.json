@@ -1,5 +1,5 @@
 {
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "https://REPLACE_WITH_RENDER_URL/api/$1" }
+    { "source": "/api/(.*)", "destination": "https://cuddle-huff-uncurious.ngrok-free.dev/api/$1" }
   ]
 }
