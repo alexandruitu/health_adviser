@@ -13,7 +13,10 @@ export function clearToken() {
 
 function authHeader(): Record<string, string> {
   const t = getToken();
-  return t ? { Authorization: `Bearer ${t}` } : {};
+  return {
+    ...(t ? { Authorization: `Bearer ${t}` } : {}),
+    "ngrok-skip-browser-warning": "1",
+  };
 }
 
 function handleStatus(res: Response, path: string) {

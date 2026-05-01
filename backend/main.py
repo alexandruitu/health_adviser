@@ -96,10 +96,11 @@ from garmin import (
 )
 
 # ─── constants kept in main (OAuth redirect URIs used directly in routes) ────
+_BACKEND_URL        = os.environ.get("BACKEND_URL", "http://localhost:8000")
 STRAVA_AUTH_URL     = "https://www.strava.com/oauth/authorize"
-STRAVA_REDIRECT_URI = "http://localhost:8000/api/strava/callback"
+STRAVA_REDIRECT_URI = f"{_BACKEND_URL}/api/strava/callback"
 GDRIVE_AUTH_URL     = "https://accounts.google.com/o/oauth2/v2/auth"
-GDRIVE_REDIRECT_URI = "http://localhost:8000/api/gdrive/callback"
+GDRIVE_REDIRECT_URI = f"{_BACKEND_URL}/api/gdrive/callback"
 GDRIVE_SCOPES       = "https://www.googleapis.com/auth/drive.readonly"
 
 # ─── app setup ────────────────────────────────────────────────────────────────
