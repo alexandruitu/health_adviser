@@ -1,5 +1,4 @@
-[app]
-name = "health-adviser-api"
+app = "health-adviser-api"
 primary_region = "ams"
 
 [build]
