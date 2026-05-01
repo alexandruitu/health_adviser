@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { LayoutDashboard, Heart, Moon, Weight, FlaskConical, List, Settings as SettingsIcon, Dumbbell, GripVertical, BrainCircuit } from "lucide-react";
+import { LayoutDashboard, Heart, Moon, Weight, FlaskConical, List, Settings as SettingsIcon, Dumbbell, GripVertical, BrainCircuit, LogOut } from "lucide-react";
 import { AdvisorModal } from "./components/AdvisorModal";
 import { Overview }            from "./pages/Overview";
 import { Heart as HeartPage }  from "./pages/Heart";
@@ -10,6 +10,8 @@ import { Body }                from "./pages/Body";
 import { Labs }                from "./pages/Labs";
 import { Settings }            from "./pages/Settings";
 import { IngestToast }         from "./components/IngestToast";
+import { LoginPage }           from "./pages/LoginPage";
+import { getToken, clearToken } from "./api";
 
 const PAGES = [
   { id: "overview",  label: "Overview",  icon: LayoutDashboard, component: Overview },
@@ -29,9 +31,29 @@ const ALL_PAGES = [...PAGES, ...BOTTOM_PAGES];
 
 const SIDEBAR_MIN = 160;
 const SIDEBAR_MAX = 320;
-const SIDEBAR_DEFAULT = 208; // w-52
+const SIDEBAR_DEFAULT = 208;
+
+// ─── Auth gate ───────────────────────────────────────────────────────────────
 
 export default function App() {
+  const [token, setTokenState] = useState<string | null>(() => getToken());
+
+  useEffect(() => {
+    const handler = () => setTokenState(null);
+    window.addEventListener("auth:logout", handler);
+    return () => window.removeEventListener("auth:logout", handler);
+  }, []);
+
+  if (!token) {
+    return <LoginPage onLogin={() => setTokenState(getToken())} />;
+  }
+
+  return <MainApp onLogout={() => { clearToken(); setTokenState(null); }} />;
+}
+
+// ─── Main app (only rendered when authenticated) ──────────────────────────────
+
+function MainApp({ onLogout }: { onLogout: () => void }) {
   const [page, setPage] = useState("overview");
   const [advisorOpen, setAdvisorOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
@@ -138,9 +160,19 @@ export default function App() {
           </button>
         </div>
 
-        {/* Bottom: Settings */}
+        {/* Bottom: Settings + Sign out */}
         <div style={{ borderTop: "1px solid #2a2d3a", paddingTop: "0.5rem", marginTop: "0.5rem" }}>
           {BOTTOM_PAGES.map(({ id, label, icon: Icon }) => navBtn(id, label, Icon))}
+          <button
+            onClick={onLogout}
+            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-left w-full transition-colors"
+            style={{ backgroundColor: "transparent", color: "#64748b", cursor: "pointer", border: "none" }}
+            onMouseEnter={e => (e.currentTarget.style.color = "#f87171")}
+            onMouseLeave={e => (e.currentTarget.style.color = "#64748b")}
+          >
+            <LogOut size={15} />
+            {sidebarWidth > 180 ? "Sign out" : null}
+          </button>
         </div>
 
         {/* Drag handle */}

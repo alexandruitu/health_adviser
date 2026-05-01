@@ -1,3 +1,7 @@
+# Env files
+.env
+backend/.env
+
 # Secrets & tokens
 gdrive_config.json
 strava_config.json

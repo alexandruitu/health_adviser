@@ -20,8 +20,7 @@ import garth
 from analytics import clear_all_caches
 from db import _db
 
-GARMIN_CONFIG_PATH = Path(__file__).parent.parent / "garmin_config.json"
-GARMIN_TOKEN_DIR   = Path(__file__).parent.parent / "garth_tokens"
+from paths import GARMIN_CONFIG_PATH, GARMIN_TOKEN_DIR
 
 # In-memory sync job state
 _garmin_sync_job: dict = {"status": "idle", "added": 0, "skipped": 0, "error": None}

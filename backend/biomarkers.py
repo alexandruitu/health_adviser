@@ -8,7 +8,7 @@ from pathlib import Path
 
 from db import _db, _ensure_biomarker_tables
 
-BIOMARKERS_CONFIG_PATH = Path(__file__).parent.parent / "biomarkers_config.json"
+from paths import BIOMARKERS_CONFIG_PATH
 
 BIOMARKER_CATEGORIES = {
     "hematology": ["hemoglobin", "hematocrit", "red blood cells", "rbc", "wbc", "white blood cells",

@@ -11,7 +11,7 @@ import httpx
 from analytics import clear_all_caches
 from db import _db
 
-STRAVA_CONFIG_PATH  = Path(__file__).parent.parent / "strava_config.json"
+from paths import STRAVA_CONFIG_PATH
 STRAVA_AUTH_URL     = "https://www.strava.com/oauth/authorize"
 STRAVA_TOKEN_URL    = "https://www.strava.com/oauth/token"
 STRAVA_REDIRECT_URI = "http://localhost:8000/api/strava/callback"

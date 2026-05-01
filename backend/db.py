@@ -2,9 +2,8 @@
 Database connection and schema helpers.
 """
 import sqlite3
-from pathlib import Path
 
-DB_PATH = Path(__file__).parent / "health.db"
+from paths import DB_PATH
 
 
 def _db() -> sqlite3.Connection:

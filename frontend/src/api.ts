@@ -1,5 +1,26 @@
 const BASE = "/api";
 
+export function getToken(): string | null {
+  return localStorage.getItem("auth_token");
+}
+export function setToken(t: string) {
+  localStorage.setItem("auth_token", t);
+}
+export function clearToken() {
+  localStorage.removeItem("auth_token");
+  window.dispatchEvent(new Event("auth:logout"));
+}
+
+function authHeader(): Record<string, string> {
+  const t = getToken();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+function handleStatus(res: Response, path: string) {
+  if (res.status === 401) { clearToken(); throw new Error("Unauthorized"); }
+  if (!res.ok) throw new Error(`API error ${res.status}: ${path}`);
+}
+
 async function get<T>(path: string, params?: Record<string, string | undefined>): Promise<T> {
   const url = new URL(BASE + path, window.location.origin);
   if (params) {
@@ -7,8 +28,8 @@ async function get<T>(path: string, params?: Record<string, string | undefined>)
       if (v !== undefined) url.searchParams.set(k, v);
     });
   }
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error(`API error ${res.status}: ${path}`);
+  const res = await fetch(url.toString(), { headers: authHeader() });
+  handleStatus(res, path);
   return res.json();
 }
 
@@ -251,11 +272,11 @@ export const api = {
   goalsCreate: (name: string, event_date: string, target_ctl?: number) =>
     fetch("/api/goals", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeader() },
       body: JSON.stringify({ name, event_date, target_ctl }),
     }).then(r => r.json()) as Promise<Goal>,
   goalsDelete: (id: number) =>
-    fetch(`/api/goals/${id}`, { method: "DELETE" }).then(r => r.json()),
+    fetch(`/api/goals/${id}`, { method: "DELETE", headers: authHeader() }).then(r => r.json()),
   trainingYoY: (sport: "running" | "cycling") =>
     get<YoYResponse>("/training/yoy", { sport }),
   trainingHRV: (start?: string, end?: string) =>
@@ -267,7 +288,7 @@ export const api = {
   // Strava integration
   stravaStatus: () => get<StravaStatus>("/strava/status"),
   stravaSync: (force = false): Promise<{ status: string }> =>
-    fetch(`/api/strava/sync${force ? "?force=true" : ""}`, { method: "POST" }).then(r => {
+    fetch(`/api/strava/sync${force ? "?force=true" : ""}`, { method: "POST", headers: authHeader() }).then(r => {
       if (!r.ok) throw new Error(`Sync failed: ${r.status}`);
       return r.json();
     }),
@@ -291,11 +312,11 @@ export const api = {
   biomarkersTrends: (marker?: string) =>
     get<BiomarkerReading[]>("/biomarkers/trends", marker ? { marker } : undefined),
   biomarkersDeleteUpload: (id: number): Promise<{ deleted: number }> =>
-    fetch(`/api/biomarkers/uploads/${id}`, { method: "DELETE" }).then(r => r.json()),
+    fetch(`/api/biomarkers/uploads/${id}`, { method: "DELETE", headers: authHeader() }).then(r => r.json()),
   biomarkersUpload: async (file: File): Promise<BiomarkersExtracted> => {
     const form = new FormData();
     form.append("file", file);
-    const res = await fetch("/api/biomarkers/upload", { method: "POST", body: form });
+    const res = await fetch("/api/biomarkers/upload", { method: "POST", headers: authHeader(), body: form });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: "Upload failed" }));
       throw new Error(err.detail || "Upload failed");
@@ -305,7 +326,7 @@ export const api = {
   biomarkersConfirm: async (payload: BiomarkersExtracted): Promise<{ upload_id: number; saved: number }> => {
     const res = await fetch("/api/biomarkers/confirm", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeader() },
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
@@ -319,16 +340,16 @@ export const api = {
   garminConnect: (email: string, password: string, mfa_code?: string): Promise<{ connected: boolean; email: string }> =>
     fetch("/api/garmin/connect", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeader() },
       body: JSON.stringify({ email, password, mfa_code }),
     }).then(async r => {
       if (!r.ok) { const e = await r.json(); throw new Error(e.detail || "Login failed"); }
       return r.json();
     }),
   garminDisconnect: (): Promise<{ connected: boolean }> =>
-    fetch("/api/garmin/disconnect", { method: "POST" }).then(r => r.json()),
+    fetch("/api/garmin/disconnect", { method: "POST", headers: authHeader() }).then(r => r.json()),
   garminSync: (force = false): Promise<{ status: string }> =>
-    fetch(`/api/garmin/sync${force ? "?force=true" : ""}`, { method: "POST" }).then(r => {
+    fetch(`/api/garmin/sync${force ? "?force=true" : ""}`, { method: "POST", headers: authHeader() }).then(r => {
       if (!r.ok) throw new Error(`Sync failed: ${r.status}`);
       return r.json();
     }),
@@ -339,7 +360,7 @@ export const api = {
   aiSearch: async (query: string): Promise<AISearchResult> => {
     const res = await fetch("/api/activities/ai_search", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeader() },
       body: JSON.stringify({ query }),
     });
     if (!res.ok) {
@@ -362,7 +383,7 @@ export const api = {
     try {
       const res = await fetch("/api/adviser/assess", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeader() },
         body: JSON.stringify({ tab, start, end, data }),
       });
       if (!res.ok) {
@@ -410,7 +431,7 @@ export const api = {
     try {
       const res = await fetch("/api/adviser/followup", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeader() },
         body: JSON.stringify({ tab, start, end, data, conversation }),
       });
       if (!res.ok) {
@@ -449,7 +470,7 @@ export const api = {
   advisorAsk: async (question: string): Promise<{ answer: string }> => {
     const res = await fetch("/api/advisor/ask", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeader() },
       body: JSON.stringify({ question }),
     });
     if (!res.ok) {

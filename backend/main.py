@@ -8,14 +8,18 @@ import json
 import math
 import os
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
+import jwt
 import pandas as pd
-from fastapi import FastAPI, Query, BackgroundTasks, UploadFile, File, HTTPException
+from dotenv import load_dotenv
+load_dotenv()
+from fastapi import FastAPI, Query, BackgroundTasks, UploadFile, File, HTTPException, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
 
 # ─── helper modules ───────────────────────────────────────────────────────────
 from db import _db, _ensure_biomarker_tables
@@ -106,7 +110,60 @@ app.add_middleware(
     allow_origins=["http://localhost:5173", "http://localhost:4173", "http://localhost:5174"],
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
+
+# ─── auth ────────────────────────────────────────────────────────────────────
+
+_APP_USERNAME = os.environ.get("APP_USERNAME", "admin")
+_APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
+_JWT_SECRET   = os.environ.get("JWT_SECRET", "dev-secret-change-me")
+_JWT_ALGO     = "HS256"
+_JWT_TTL_DAYS = 30
+
+# Paths that don't require a token
+_PUBLIC_PATHS = {
+    "/api/auth/login",
+    "/api/health/ingest",
+    "/api/health/status",
+    "/api/strava/callback",
+    "/api/gdrive/callback",
+}
+
+
+def _make_token() -> str:
+    exp = datetime.now(tz=timezone.utc) + timedelta(days=_JWT_TTL_DAYS)
+    return jwt.encode({"sub": _APP_USERNAME, "exp": exp}, _JWT_SECRET, algorithm=_JWT_ALGO)
+
+
+@app.middleware("http")
+async def _auth_middleware(request: Request, call_next):
+    # Pass through OPTIONS (CORS preflight) and public paths
+    if request.method == "OPTIONS" or request.url.path in _PUBLIC_PATHS:
+        return await call_next(request)
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+    try:
+        jwt.decode(auth.split(" ", 1)[1], _JWT_SECRET, algorithms=[_JWT_ALGO])
+    except jwt.PyJWTError:
+        return JSONResponse(status_code=401, content={"detail": "Invalid or expired token"})
+    return await call_next(request)
+
+
+class _LoginBody(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/api/auth/login")
+def auth_login(body: _LoginBody):
+    if not _APP_PASSWORD:
+        raise HTTPException(status_code=500, detail="APP_PASSWORD env var not set")
+    if body.username != _APP_USERNAME or body.password != _APP_PASSWORD:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return {"token": _make_token()}
+
 
 # Ensure biomarker tables exist on startup
 _ensure_biomarker_tables()

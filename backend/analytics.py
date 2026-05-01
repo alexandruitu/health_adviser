@@ -11,7 +11,7 @@ import pandas as pd
 
 from db import _db
 
-DATA_DIR = Path(__file__).parent.parent.parent / "health_csvs" / "cleaned"
+from paths import DATA_DIR
 
 STRAVA_EXTRA_COLS = [
     "moving_time_min", "elevation_m", "avg_hr", "max_hr",

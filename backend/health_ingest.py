@@ -9,7 +9,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-DATA_DIR = Path(__file__).parent.parent.parent / "health_csvs" / "cleaned"
+from paths import DATA_DIR
 
 # How each daily_summary column is built from a by_type CSV:  col_name → (csv_name, agg)
 _DAILY_AGG: dict = {
@@ -88,7 +88,7 @@ _CACHES_TO_CLEAR = [
     "_pmc_df", "_valid_metrics", "_sleep",
 ]
 
-HEALTH_INGEST_CONFIG = Path(__file__).parent.parent / "health_ingest_config.json"
+from paths import HEALTH_INGEST_CONFIG
 
 
 def _load_ingest_config() -> dict:

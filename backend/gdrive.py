@@ -14,7 +14,7 @@ import pandas as pd
 from db import _db
 from analytics import clear_all_caches
 
-GDRIVE_CONFIG_PATH   = Path(__file__).parent.parent / "gdrive_config.json"
+from paths import GDRIVE_CONFIG_PATH
 GDRIVE_AUTH_URL      = "https://accounts.google.com/o/oauth2/v2/auth"
 GDRIVE_TOKEN_URL     = "https://oauth2.googleapis.com/token"
 GDRIVE_REDIRECT_URI  = "http://localhost:8000/api/gdrive/callback"
