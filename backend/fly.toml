@@ -1,0 +1,24 @@
+[app]
+name = "health-adviser-api"
+primary_region = "ams"
+
+[build]
+
+[env]
+DATA_ROOT = "/data"
+
+[http_service]
+internal_port = 8080
+force_https = true
+auto_stop_machines = "stop"
+auto_start_machines = true
+min_machines_running = 0
+
+[[vm]]
+memory = "512mb"
+cpu_kind = "shared"
+cpus = 1
+
+[[mounts]]
+source = "health_data"
+destination = "/data"
