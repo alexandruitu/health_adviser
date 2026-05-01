@@ -1,5 +1,5 @@
 app = "health-adviser-api"
-primary_region = "ams"
+primary_region = "lhr"
 
 [build]
 
