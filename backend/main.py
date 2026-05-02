@@ -132,7 +132,9 @@ _PUBLIC_PATHS = {
     "/api/auth/login",
     "/api/health/ingest",
     "/api/health/status",
+    "/api/strava/auth",      # browser-initiated OAuth redirect
     "/api/strava/callback",
+    "/api/gdrive/auth",      # browser-initiated OAuth redirect
     "/api/gdrive/callback",
 }
 
